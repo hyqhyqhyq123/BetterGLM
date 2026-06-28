@@ -1,0 +1,15 @@
+{
+  "templates": [
+    {
+      "id": "portfolio_demo_weather",
+      "title": "Portfolio demo weather search",
+      "device_type": "ios",
+      "prompt": "打开 Safari 搜索{city}天气，并停留在搜索结果页",
+      "purpose": "用于作品集录屏，展示稳定的应用启动、输入和页面理解链路。",
+      "variables": {
+        "city": "上海"
+      },
+      "tags": ["portfolio", "browser", "ios"]
+    }
+  ]
+}

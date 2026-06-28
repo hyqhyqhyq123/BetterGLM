@@ -28,6 +28,13 @@ from phone_agent.config.apps_ios import list_supported_apps
 from phone_agent.doctor import DoctorOptions, print_doctor_report, run_doctor
 from phone_agent.env import load_env_file
 from phone_agent.model import ModelConfig
+from phone_agent.task_templates import (
+    format_task_templates,
+    get_task_template,
+    load_task_templates,
+    parse_template_vars,
+    render_task_template,
+)
 from phone_agent.web_console import WebConsoleOptions, run_web_console
 from phone_agent.xctest import XCTestConnection, list_devices
 
@@ -270,6 +277,12 @@ Examples:
     # Run environment diagnostics
     python ios.py --doctor
 
+    # List reusable task templates
+    python ios.py --list-templates
+
+    # Run a template with variables
+    python ios.py --template ios_safari_weather --template-var city=上海
+
     # Start local Web console
     python ios.py --web
 
@@ -359,6 +372,33 @@ Examples:
         type=str,
         default=os.getenv("PHONE_AGENT_REPLAY_DIR"),
         help="Directory for per-step replay logs and screenshots",
+    )
+
+    parser.add_argument(
+        "--list-templates",
+        action="store_true",
+        help="List reusable BetterGLM task templates and exit",
+    )
+
+    parser.add_argument(
+        "--template",
+        type=str,
+        help="Run a reusable task template by ID",
+    )
+
+    parser.add_argument(
+        "--template-var",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Set a variable used by --template, e.g. city=上海",
+    )
+
+    parser.add_argument(
+        "--templates-file",
+        type=str,
+        default=os.getenv("PHONE_AGENT_TEMPLATES_FILE"),
+        help="Optional JSON file with additional task templates",
     )
 
     parser.add_argument(
@@ -501,6 +541,7 @@ def main():
                 wda_url=args.wda_url,
                 lang=args.lang,
                 replay_dir=args.replay_dir or "runs/web",
+                templates_file=args.templates_file,
                 quiet=args.quiet,
             )
         )
@@ -520,6 +561,30 @@ def main():
         )
         print_doctor_report(report)
         sys.exit(0 if report.ok else 1)
+
+    try:
+        templates = load_task_templates(args.templates_file)
+    except ValueError as e:
+        print(f"Template error: {e}")
+        sys.exit(2)
+
+    if args.list_templates:
+        print(format_task_templates(templates, "ios"))
+        return
+
+    resolved_task = args.task
+    template = None
+    if args.template:
+        if args.task:
+            print("Template error: use either a positional task or --template, not both.")
+            sys.exit(2)
+        try:
+            template_vars = parse_template_vars(args.template_var)
+            template = get_task_template(templates, args.template, "ios")
+            resolved_task = render_task_template(template, template_vars)
+        except ValueError as e:
+            print(f"Template error: {e}")
+            sys.exit(2)
 
     # Handle --list-apps (no system check needed)
     if args.list_apps:
@@ -590,9 +655,12 @@ def main():
     print("=" * 50)
 
     # Run with provided task or enter interactive mode
-    if args.task:
-        print(f"\nTask: {args.task}\n")
-        result = agent.run(args.task)
+    if resolved_task:
+        if template:
+            print(f"\nTemplate: {template.id} - {template.title}")
+            print(f"Purpose: {template.purpose}")
+        print(f"\nTask: {resolved_task}\n")
+        result = agent.run(resolved_task)
         print(f"\nResult: {result}")
         if agent.replay_path:
             print(f"Replay: {agent.replay_path}/index.html")

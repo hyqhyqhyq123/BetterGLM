@@ -18,6 +18,11 @@ from phone_agent.agent_ios import IOSAgentConfig, IOSPhoneAgent
 from phone_agent.device_factory import DeviceType, set_device_type
 from phone_agent.doctor import DoctorOptions, run_doctor
 from phone_agent.model import ModelConfig
+from phone_agent.task_templates import (
+    filter_task_templates,
+    load_task_templates,
+    task_template_payload,
+)
 
 
 @dataclass
@@ -35,6 +40,7 @@ class WebConsoleOptions:
     wda_url: str = "http://localhost:8100"
     lang: str = "cn"
     replay_dir: str = "runs/web"
+    templates_file: str | None = None
     quiet: bool = False
 
 
@@ -166,6 +172,14 @@ class WebConsoleHandler(BaseHTTPRequestHandler):
             self._send_html(INDEX_HTML)
         elif parsed.path == "/api/state":
             self._send_json(self.console_state.snapshot())
+        elif parsed.path == "/api/templates":
+            try:
+                self._send_json({"templates": self._load_templates()})
+            except ValueError as e:
+                self._send_json(
+                    {"templates": [], "error": str(e)},
+                    status=HTTPStatus.INTERNAL_SERVER_ERROR,
+                )
         elif parsed.path.startswith("/replays/"):
             self._send_replay_file(parsed.path)
         else:
@@ -229,6 +243,15 @@ class WebConsoleHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _load_templates(self) -> list[dict[str, Any]]:
+        templates = load_task_templates(self.console_state.options.templates_file)
+        return [
+            task_template_payload(template)
+            for template in filter_task_templates(
+                templates, self.console_state.options.device_type
+            )
+        ]
 
     def _send_replay_file(self, request_path: str) -> None:
         replay_root = Path(self.console_state.options.replay_dir).resolve()
@@ -381,6 +404,9 @@ INDEX_HTML = """<!doctype html>
     pre { white-space: pre-wrap; word-break: break-word; background: #f6f8fa; border-radius: 6px; padding: 10px; max-height: 220px; overflow: auto; }
     .doctor-check { border-top: 1px solid #d8dee4; padding: 8px 0; font-size: 13px; }
     .doctor-check:first-child { border-top: 0; }
+    .templates { display: grid; gap: 8px; margin-top: 10px; }
+    .template { text-align: left; background: #f6f8fa; color: #1f2328; border: 1px solid #d0d7de; }
+    .template span { display: block; font-size: 12px; color: #667085; font-weight: 400; margin-top: 4px; }
     @media (max-width: 900px) { main { grid-template-columns: 1fr; } .step { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -404,6 +430,10 @@ INDEX_HTML = """<!doctype html>
         <div class="kv" id="config"></div>
       </section>
       <section style="margin-top: 18px;">
+        <h2>任务模板</h2>
+        <div id="templates" class="templates muted">加载中...</div>
+      </section>
+      <section style="margin-top: 18px;">
         <h2>Doctor</h2>
         <div id="doctor" class="muted">点击 Doctor 查看本机环境诊断。</div>
       </section>
@@ -421,6 +451,12 @@ INDEX_HTML = """<!doctype html>
       const res = await fetch('/api/state');
       const state = await res.json();
       renderState(state);
+    }
+
+    async function fetchTemplates() {
+      const res = await fetch('/api/templates');
+      const payload = await res.json();
+      renderTemplates(payload.templates || []);
     }
 
     async function runTask() {
@@ -497,11 +533,35 @@ INDEX_HTML = """<!doctype html>
       `).join('');
     }
 
+    function renderTemplates(templates) {
+      const el = document.getElementById('templates');
+      if (!templates.length) {
+        el.textContent = '暂无模板。';
+        el.className = 'templates muted';
+        return;
+      }
+      el.className = 'templates';
+      el.innerHTML = templates.map(template => `
+        <button class="template" data-template-id="${escapeHtml(template.id)}" onclick="useTemplate(this.dataset.templateId)">
+          ${escapeHtml(template.title)}
+          <span>${escapeHtml(template.purpose)}</span>
+        </button>
+      `).join('');
+      window.betterglmTemplates = templates;
+    }
+
+    function useTemplate(templateId) {
+      const templates = window.betterglmTemplates || [];
+      const template = templates.find(item => item.id === templateId);
+      if (template) document.getElementById('task').value = template.rendered_prompt || template.prompt || '';
+    }
+
     function escapeHtml(value) {
       return String(value || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
     fetchState();
+    fetchTemplates();
     setInterval(fetchState, 1500);
   </script>
 </body>
