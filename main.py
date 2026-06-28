@@ -30,6 +30,7 @@ from phone_agent.config.apps import list_supported_apps
 from phone_agent.config.apps_harmonyos import list_supported_apps as list_harmonyos_apps
 from phone_agent.config.apps_ios import list_supported_apps as list_ios_apps
 from phone_agent.device_factory import DeviceType, get_device_factory, set_device_type
+from phone_agent.doctor import DoctorOptions, print_doctor_report, run_doctor
 from phone_agent.env import load_env_file
 from phone_agent.model import ModelConfig
 from phone_agent.xctest import XCTestConnection
@@ -425,6 +426,8 @@ Examples:
 
     parser.add_argument(
         "--apikey",
+        "--api-key",
+        dest="apikey",
         type=str,
         default=os.getenv("PHONE_AGENT_API_KEY", "EMPTY"),
         help="API key for model authentication",
@@ -494,6 +497,18 @@ Examples:
         "--wda-status",
         action="store_true",
         help="Show WebDriverAgent status and exit (iOS only)",
+    )
+
+    parser.add_argument(
+        "--doctor",
+        action="store_true",
+        help="Run BetterGLM environment diagnostics and exit",
+    )
+
+    parser.add_argument(
+        "--doctor-skip-model",
+        action="store_true",
+        help="Skip model API connectivity during --doctor",
     )
 
     # Other options
@@ -709,6 +724,21 @@ def main():
         from phone_agent.hdc import set_hdc_verbose
 
         set_hdc_verbose(True)
+
+    if args.doctor:
+        report = run_doctor(
+            DoctorOptions(
+                device_type=args.device_type,
+                base_url=args.base_url,
+                api_key=args.apikey,
+                model_name=args.model,
+                wda_url=args.wda_url,
+                device_id=args.device_id,
+                check_model=not args.doctor_skip_model,
+            )
+        )
+        print_doctor_report(report)
+        sys.exit(0 if report.ok else 1)
 
     # Handle --list-apps (no system check needed)
     if args.list_apps:
