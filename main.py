@@ -511,6 +511,13 @@ Examples:
         help="Skip model API connectivity during --doctor",
     )
 
+    parser.add_argument(
+        "--replay-dir",
+        type=str,
+        default=os.getenv("PHONE_AGENT_REPLAY_DIR"),
+        help="Directory for per-step replay logs and screenshots",
+    )
+
     # Other options
     parser.add_argument(
         "--quiet", "-q", action="store_true", help="Suppress verbose output"
@@ -797,6 +804,7 @@ def main():
             device_id=args.device_id,
             verbose=not args.quiet,
             lang=args.lang,
+            replay_dir=args.replay_dir,
         )
 
         agent = IOSPhoneAgent(
@@ -808,8 +816,10 @@ def main():
         agent_config = AgentConfig(
             max_steps=args.max_steps,
             device_id=args.device_id,
+            device_type=args.device_type,
             verbose=not args.quiet,
             lang=args.lang,
+            replay_dir=args.replay_dir,
         )
 
         agent = PhoneAgent(
@@ -859,6 +869,8 @@ def main():
         print(f"\nTask: {args.task}\n")
         result = agent.run(args.task)
         print(f"\nResult: {result}")
+        if agent.replay_path:
+            print(f"Replay: {agent.replay_path}/index.html")
     else:
         # Interactive mode
         print("\nEntering interactive mode. Type 'quit' to exit.\n")
@@ -877,6 +889,8 @@ def main():
                 print()
                 result = agent.run(task)
                 print(f"\nResult: {result}\n")
+                if agent.replay_path:
+                    print(f"Replay: {agent.replay_path}/index.html\n")
                 agent.reset()
 
             except KeyboardInterrupt:

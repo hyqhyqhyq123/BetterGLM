@@ -10,6 +10,7 @@ from phone_agent.actions.handler_ios import IOSActionHandler
 from phone_agent.config import get_messages, get_system_prompt
 from phone_agent.model import ModelClient, ModelConfig
 from phone_agent.model.client import MessageBuilder
+from phone_agent.replay import ReplayRecorder
 from phone_agent.xctest import XCTestConnection, get_current_app, get_screenshot
 
 
@@ -24,6 +25,7 @@ class IOSAgentConfig:
     lang: str = "cn"
     system_prompt: str | None = None
     verbose: bool = True
+    replay_dir: str | None = None
 
     def __post_init__(self):
         if self.system_prompt is None:
@@ -98,6 +100,7 @@ class IOSPhoneAgent:
 
         self._context: list[dict[str, Any]] = []
         self._step_count = 0
+        self._replay_recorder: ReplayRecorder | None = None
 
     def run(self, task: str) -> str:
         """
@@ -111,20 +114,26 @@ class IOSPhoneAgent:
         """
         self._context = []
         self._step_count = 0
+        self._start_replay(task)
 
         # First step with user prompt
         result = self._execute_step(task, is_first=True)
 
         if result.finished:
-            return result.message or "Task completed"
+            final_message = result.message or "Task completed"
+            self._finish_replay(final_message)
+            return final_message
 
         # Continue until finished or max steps reached
         while self._step_count < self.agent_config.max_steps:
             result = self._execute_step(is_first=False)
 
             if result.finished:
-                return result.message or "Task completed"
+                final_message = result.message or "Task completed"
+                self._finish_replay(final_message)
+                return final_message
 
+        self._finish_replay("Max steps reached", status="max_steps")
         return "Max steps reached"
 
     def step(self, task: str | None = None) -> StepResult:
@@ -197,6 +206,14 @@ class IOSPhoneAgent:
         except Exception as e:
             if self.agent_config.verbose:
                 traceback.print_exc()
+            self._record_replay_step(
+                current_app=current_app,
+                screen_info=screen_info,
+                screenshot=screenshot,
+                error=f"Model error: {e}",
+                message=f"Model error: {e}",
+                finished=True,
+            )
             return StepResult(
                 success=False,
                 finished=True,
@@ -211,6 +228,16 @@ class IOSPhoneAgent:
         except ValueError as e:
             if self.agent_config.verbose:
                 print(f"⚠️  Failed to parse model action, retrying: {e}")
+            self._record_replay_step(
+                current_app=current_app,
+                screen_info=screen_info,
+                screenshot=screenshot,
+                thinking=response.thinking,
+                raw_action=response.action,
+                error=str(e),
+                message="Model action parse failed; retrying",
+                model_metrics=self._model_metrics(response),
+            )
 
             self._context[-1] = MessageBuilder.remove_images_from_message(
                 self._context[-1]
@@ -256,6 +283,7 @@ class IOSPhoneAgent:
         self._context[-1] = MessageBuilder.remove_images_from_message(self._context[-1])
 
         # Execute action
+        execution_error = None
         try:
             result = self.action_handler.execute(
                 action, screenshot.width, screenshot.height
@@ -263,6 +291,7 @@ class IOSPhoneAgent:
         except Exception as e:
             if self.agent_config.verbose:
                 traceback.print_exc()
+            execution_error = str(e)
             result = self.action_handler.execute(
                 finish(message=str(e)), screenshot.width, screenshot.height
             )
@@ -276,6 +305,19 @@ class IOSPhoneAgent:
 
         # Check if finished
         finished = action.get("_metadata") == "finish" or result.should_finish
+        self._record_replay_step(
+            current_app=current_app,
+            screen_info=screen_info,
+            screenshot=screenshot,
+            thinking=response.thinking,
+            raw_action=response.action,
+            parsed_action=action,
+            action_result=result,
+            finished=finished,
+            message=result.message or action.get("message"),
+            error=execution_error,
+            model_metrics=self._model_metrics(response),
+        )
 
         if finished and self.agent_config.verbose:
             msgs = get_messages(self.agent_config.lang)
@@ -302,3 +344,45 @@ class IOSPhoneAgent:
     def step_count(self) -> int:
         """Get the current step count."""
         return self._step_count
+
+    @property
+    def replay_path(self) -> str | None:
+        """Get the current replay directory path."""
+        if self._replay_recorder is None:
+            return None
+        return str(self._replay_recorder.run_dir)
+
+    def _start_replay(self, task: str) -> None:
+        if not self.agent_config.replay_dir:
+            self._replay_recorder = None
+            return
+
+        self._replay_recorder = ReplayRecorder(
+            root_dir=self.agent_config.replay_dir,
+            task=task,
+            device_type="ios",
+            model_name=self.model_config.model_name,
+            config={
+                "wda_url": self.agent_config.wda_url,
+                "device_id": self.agent_config.device_id,
+                "max_steps": self.agent_config.max_steps,
+            },
+        )
+
+    def _finish_replay(self, result: str, status: str = "completed") -> None:
+        if self._replay_recorder is not None:
+            self._replay_recorder.finish(result, status=status)
+
+    def _record_replay_step(self, **kwargs) -> None:
+        if self._replay_recorder is not None:
+            self._replay_recorder.record_step(
+                step_index=self._step_count,
+                **kwargs,
+            )
+
+    def _model_metrics(self, response) -> dict[str, float | None]:
+        return {
+            "time_to_first_token": response.time_to_first_token,
+            "time_to_thinking_end": response.time_to_thinking_end,
+            "total_time": response.total_time,
+        }
