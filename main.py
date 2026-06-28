@@ -33,6 +33,7 @@ from phone_agent.device_factory import DeviceType, get_device_factory, set_devic
 from phone_agent.doctor import DoctorOptions, print_doctor_report, run_doctor
 from phone_agent.env import load_env_file
 from phone_agent.model import ModelConfig
+from phone_agent.web_console import WebConsoleOptions, run_web_console
 from phone_agent.xctest import XCTestConnection
 from phone_agent.xctest import list_devices as list_ios_devices
 
@@ -404,6 +405,9 @@ Examples:
     # Check WebDriverAgent status
     python main.py --device-type ios --wda-status
 
+    # Start local Web console
+    python main.py --web --device-type ios
+
     # Pair with iOS device
     python main.py --device-type ios --pair
         """,
@@ -516,6 +520,26 @@ Examples:
         type=str,
         default=os.getenv("PHONE_AGENT_REPLAY_DIR"),
         help="Directory for per-step replay logs and screenshots",
+    )
+
+    parser.add_argument(
+        "--web",
+        action="store_true",
+        help="Start the local BetterGLM Web console and exit",
+    )
+
+    parser.add_argument(
+        "--web-host",
+        type=str,
+        default=os.getenv("BETTERGLM_WEB_HOST", "127.0.0.1"),
+        help="Host for --web (default: 127.0.0.1)",
+    )
+
+    parser.add_argument(
+        "--web-port",
+        type=int,
+        default=int(os.getenv("BETTERGLM_WEB_PORT", "8765")),
+        help="Port for --web (default: 8765)",
     )
 
     # Other options
@@ -731,6 +755,25 @@ def main():
         from phone_agent.hdc import set_hdc_verbose
 
         set_hdc_verbose(True)
+
+    if args.web:
+        run_web_console(
+            WebConsoleOptions(
+                host=args.web_host,
+                port=args.web_port,
+                device_type=args.device_type,
+                base_url=args.base_url,
+                api_key=args.apikey,
+                model_name=args.model,
+                max_steps=args.max_steps,
+                device_id=args.device_id,
+                wda_url=args.wda_url,
+                lang=args.lang,
+                replay_dir=args.replay_dir or "runs/web",
+                quiet=args.quiet,
+            )
+        )
+        return
 
     if args.doctor:
         report = run_doctor(
