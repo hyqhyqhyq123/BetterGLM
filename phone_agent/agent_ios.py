@@ -208,10 +208,37 @@ class IOSPhoneAgent:
         # Parse action from response
         try:
             action = parse_action(response.action)
-        except ValueError:
+        except ValueError as e:
             if self.agent_config.verbose:
-                traceback.print_exc()
-            action = finish(message=response.action)
+                print(f"⚠️  Failed to parse model action, retrying: {e}")
+
+            self._context[-1] = MessageBuilder.remove_images_from_message(
+                self._context[-1]
+            )
+            self._context.append(
+                MessageBuilder.create_assistant_message(
+                    f"<think>{response.thinking}</think><answer>{response.action}</answer>"
+                )
+            )
+            self._context.append(
+                MessageBuilder.create_user_message(
+                    text=(
+                        "上一次输出的 <answer> 不是可执行动作，系统无法解析。"
+                        "请继续完成原任务，并且这次 <answer> 只能输出一个动作调用，"
+                        '例如 do(action="Launch", app="微信")、'
+                        'do(action="Tap", element=[x,y])、'
+                        'do(action="Type", text="xxx") 或 finish(message="xxx")。'
+                        "不要在 <answer> 中输出解释性文字。"
+                    )
+                )
+            )
+            return StepResult(
+                success=False,
+                finished=False,
+                action=None,
+                thinking=response.thinking,
+                message=str(e),
+            )
 
         if self.agent_config.verbose:
             # Print thinking process

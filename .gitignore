@@ -51,6 +51,9 @@ htmlcov/
 Thumbs.db
 
 # Project specific
+.env
+.env.*
+!.env.example
 *.log
 /tmp/
 screenshots/

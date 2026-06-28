@@ -23,9 +23,13 @@ from urllib.parse import urlparse
 from openai import OpenAI
 
 from phone_agent.agent_ios import IOSAgentConfig, IOSPhoneAgent
+from phone_agent.cli_input import read_task_input
 from phone_agent.config.apps_ios import list_supported_apps
+from phone_agent.env import load_env_file
 from phone_agent.model import ModelConfig
 from phone_agent.xctest import XCTestConnection, list_devices
+
+load_env_file()
 
 
 def check_system_requirements(wda_url: str = "http://localhost:8100") -> bool:
@@ -90,14 +94,9 @@ def check_system_requirements(wda_url: str = "http://localhost:8100") -> bool:
         devices = list_devices()
 
         if not devices:
-            print("❌ FAILED")
-            print("   Error: No iOS devices connected.")
-            print("   Solution:")
-            print("     1. Connect your iOS device via USB")
-            print("     2. Unlock the device and tap 'Trust This Computer'")
-            print("     3. Verify connection: idevice_id -l")
-            print("     4. Or connect via WiFi using device IP")
-            all_passed = False
+            print("⚠️  SKIPPED")
+            print("   No USB/paired iOS device was found by idevice_id.")
+            print("   Continuing because WiFi WDA can work without this device list.")
         else:
             device_names = [
                 d.device_name or d.device_id[:8] + "..." for d in devices
@@ -107,12 +106,6 @@ def check_system_requirements(wda_url: str = "http://localhost:8100") -> bool:
         print("❌ FAILED")
         print(f"   Error: {e}")
         all_passed = False
-
-    # If no device connected, skip WebDriverAgent check
-    if not all_passed:
-        print("-" * 50)
-        print("❌ System check failed. Please fix the issues above.")
-        return False
 
     # Check 3: WebDriverAgent running
     print(f"3. Checking WebDriverAgent ({wda_url})...", end=" ")
@@ -291,7 +284,7 @@ Examples:
     parser.add_argument(
         "--api-key",
         type=str,
-        default="EMPTY",
+        default=os.getenv("PHONE_AGENT_API_KEY", "EMPTY"),
         help="Model API KEY",
     )
 
@@ -525,7 +518,7 @@ def main():
 
         while True:
             try:
-                task = input("Enter your task: ").strip()
+                task = read_task_input("Enter your task: ").strip()
 
                 if task.lower() in ("quit", "exit", "q"):
                     print("Goodbye!")
@@ -541,6 +534,9 @@ def main():
 
             except KeyboardInterrupt:
                 print("\n\nInterrupted. Goodbye!")
+                break
+            except EOFError:
+                print("\nGoodbye!")
                 break
             except Exception as e:
                 print(f"\nError: {e}\n")

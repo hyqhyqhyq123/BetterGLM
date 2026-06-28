@@ -25,13 +25,17 @@ from openai import OpenAI
 from phone_agent import PhoneAgent
 from phone_agent.agent import AgentConfig
 from phone_agent.agent_ios import IOSAgentConfig, IOSPhoneAgent
+from phone_agent.cli_input import read_task_input
 from phone_agent.config.apps import list_supported_apps
 from phone_agent.config.apps_harmonyos import list_supported_apps as list_harmonyos_apps
 from phone_agent.config.apps_ios import list_supported_apps as list_ios_apps
 from phone_agent.device_factory import DeviceType, get_device_factory, set_device_type
+from phone_agent.env import load_env_file
 from phone_agent.model import ModelConfig
 from phone_agent.xctest import XCTestConnection
 from phone_agent.xctest import list_devices as list_ios_devices
+
+load_env_file()
 
 
 def check_system_requirements(
@@ -145,27 +149,30 @@ def check_system_requirements(
             devices = [d.device_id for d in ios_devices]
 
         if not devices:
-            print("❌ FAILED")
-            print("   Error: No devices connected.")
-            print("   Solution:")
             if device_type == DeviceType.ADB:
+                print("❌ FAILED")
+                print("   Error: No devices connected.")
+                print("   Solution:")
                 print("     1. Enable USB debugging on your Android device")
                 print("     2. Connect via USB and authorize the connection")
                 print(
                     "     3. Or connect remotely: python main.py --connect <ip>:<port>"
                 )
+                all_passed = False
             elif device_type == DeviceType.HDC:
+                print("❌ FAILED")
+                print("   Error: No devices connected.")
+                print("   Solution:")
                 print("     1. Enable USB debugging on your HarmonyOS device")
                 print("     2. Connect via USB and authorize the connection")
                 print(
                     "     3. Or connect remotely: python main.py --device-type hdc --connect <ip>:<port>"
                 )
+                all_passed = False
             else:  # IOS
-                print("     1. Connect your iOS device via USB")
-                print("     2. Unlock device and tap 'Trust This Computer'")
-                print("     3. Verify: idevice_id -l")
-                print("     4. Or connect via WiFi using device IP")
-            all_passed = False
+                print("⚠️  SKIPPED")
+                print("   No USB/paired iOS device was found by idevice_id.")
+                print("   Continuing because WiFi WDA can work without this device list.")
         else:
             if device_type == DeviceType.ADB:
                 device_ids = [d.split("\t")[0] for d in devices]
@@ -185,7 +192,7 @@ def check_system_requirements(
         print(f"   Error: {e}")
         all_passed = False
 
-    # If no device connected, skip ADB Keyboard check
+    # If no device connected, skip ADB Keyboard/WDA check
     if not all_passed:
         print("-" * 50)
         print("❌ System check failed. Please fix the issues above.")
@@ -828,7 +835,7 @@ def main():
 
         while True:
             try:
-                task = input("Enter your task: ").strip()
+                task = read_task_input("Enter your task: ").strip()
 
                 if task.lower() in ("quit", "exit", "q"):
                     print("Goodbye!")
@@ -844,6 +851,9 @@ def main():
 
             except KeyboardInterrupt:
                 print("\n\nInterrupted. Goodbye!")
+                break
+            except EOFError:
+                print("\nGoodbye!")
                 break
             except Exception as e:
                 print(f"\nError: {e}\n")
