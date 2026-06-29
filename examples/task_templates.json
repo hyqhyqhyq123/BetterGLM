@@ -9,7 +9,13 @@
       "variables": {
         "city": "上海"
       },
-      "tags": ["portfolio", "browser", "ios"]
+      "tags": ["portfolio", "browser", "ios"],
+      "success_criteria": {
+        "must_contain_text": ["{city}", "天气"],
+        "target_app": "Safari",
+        "max_steps": 12,
+        "min_score": 80
+      }
     }
   ]
 }

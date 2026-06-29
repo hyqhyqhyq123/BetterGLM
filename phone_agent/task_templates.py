@@ -19,6 +19,7 @@ class TaskTemplate:
     purpose: str
     variables: dict[str, str] = field(default_factory=dict)
     tags: list[str] = field(default_factory=list)
+    success_criteria: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "TaskTemplate":
@@ -35,6 +36,7 @@ class TaskTemplate:
             purpose=str(data["purpose"]),
             variables={str(k): str(v) for k, v in data.get("variables", {}).items()},
             tags=[str(tag) for tag in data.get("tags", [])],
+            success_criteria=dict(data.get("success_criteria", {})),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -50,6 +52,12 @@ DEFAULT_TASK_TEMPLATES: tuple[TaskTemplate, ...] = (
         purpose="验证 iOS WDA、视觉理解、应用启动和文本输入是否完整可用。",
         variables={"city": "北京"},
         tags=["smoke", "browser", "ios"],
+        success_criteria={
+            "must_contain_text": ["{city}", "天气"],
+            "target_app": "Safari",
+            "max_steps": 12,
+            "min_score": 80,
+        },
     ),
     TaskTemplate(
         id="ios_settings_wifi",
@@ -58,6 +66,12 @@ DEFAULT_TASK_TEMPLATES: tuple[TaskTemplate, ...] = (
         prompt="打开设置，查看当前 Wi-Fi 页面，不要修改任何设置",
         purpose="验证只读型系统设置导航能力，适合安全演示和环境排查。",
         tags=["smoke", "settings", "ios", "safe"],
+        success_criteria={
+            "must_contain_text": ["Wi-Fi"],
+            "target_app": "Settings",
+            "max_steps": 8,
+            "min_score": 80,
+        },
     ),
     TaskTemplate(
         id="ios_notes_demo",
@@ -69,6 +83,12 @@ DEFAULT_TASK_TEMPLATES: tuple[TaskTemplate, ...] = (
         ),
         purpose="展示跨步骤输入和结果留痕能力，适合作品集录屏。",
         tags=["demo", "notes", "ios"],
+        success_criteria={
+            "must_contain_text": ["BetterGLM", "Doctor", "Replay", "Web Console"],
+            "target_app": "Notes",
+            "max_steps": 20,
+            "min_score": 80,
+        },
     ),
     TaskTemplate(
         id="android_browser_weather",
@@ -78,6 +98,11 @@ DEFAULT_TASK_TEMPLATES: tuple[TaskTemplate, ...] = (
         purpose="验证 Android ADB、应用启动和文本输入链路。",
         variables={"city": "北京"},
         tags=["smoke", "browser", "android"],
+        success_criteria={
+            "must_contain_text": ["{city}", "天气"],
+            "max_steps": 15,
+            "min_score": 80,
+        },
     ),
     TaskTemplate(
         id="harmony_browser_weather",
@@ -87,6 +112,11 @@ DEFAULT_TASK_TEMPLATES: tuple[TaskTemplate, ...] = (
         purpose="验证 HarmonyOS HDC、应用启动和文本输入链路。",
         variables={"city": "北京"},
         tags=["smoke", "browser", "harmonyos"],
+        success_criteria={
+            "must_contain_text": ["{city}", "天气"],
+            "max_steps": 15,
+            "min_score": 80,
+        },
     ),
 )
 
@@ -172,11 +202,22 @@ def render_task_template(
     return template.prompt.format_map(_TemplateVars(values))
 
 
+def render_success_criteria(
+    template: TaskTemplate, variables: dict[str, str] | None = None
+) -> dict[str, Any]:
+    """Render success criteria placeholders with template variables."""
+
+    values = dict(template.variables)
+    values.update(variables or {})
+    return _render_value(template.success_criteria, _TemplateVars(values))
+
+
 def task_template_payload(template: TaskTemplate) -> dict[str, Any]:
     """Return a JSON-friendly template with its default rendered prompt."""
 
     data = template.to_dict()
     data["rendered_prompt"] = render_task_template(template)
+    data["rendered_success_criteria"] = render_success_criteria(template)
     return data
 
 
@@ -209,3 +250,13 @@ def format_task_templates(
 class _TemplateVars(dict[str, str]):
     def __missing__(self, key: str) -> str:
         return "{" + key + "}"
+
+
+def _render_value(value: Any, variables: _TemplateVars) -> Any:
+    if isinstance(value, str):
+        return value.format_map(variables)
+    if isinstance(value, list):
+        return [_render_value(item, variables) for item in value]
+    if isinstance(value, dict):
+        return {key: _render_value(item, variables) for key, item in value.items()}
+    return value

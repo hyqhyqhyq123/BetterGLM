@@ -17,10 +17,13 @@ from phone_agent.agent import AgentConfig
 from phone_agent.agent_ios import IOSAgentConfig, IOSPhoneAgent
 from phone_agent.device_factory import DeviceType, set_device_type
 from phone_agent.doctor import DoctorOptions, run_doctor
+from phone_agent.evaluator import evaluate_replay, save_evaluation_report
 from phone_agent.model import ModelConfig
 from phone_agent.task_templates import (
     filter_task_templates,
+    get_task_template,
     load_task_templates,
+    render_success_criteria,
     task_template_payload,
 )
 
@@ -52,8 +55,10 @@ class WebConsoleState:
         self.lock = threading.Lock()
         self.running = False
         self.task: str | None = None
+        self.template_id: str | None = None
         self.result: str | None = None
         self.error: str | None = None
+        self.evaluation: dict[str, Any] | None = None
         self.replay_path: str | None = None
         self.started_at: str | None = None
         self.finished_at: str | None = None
@@ -64,21 +69,36 @@ class WebConsoleState:
             data = {
                 "running": self.running,
                 "task": self.task,
+                "template_id": self.template_id,
                 "result": self.result,
                 "error": self.error,
+                "evaluation": self.evaluation,
                 "replay_path": self.replay_path,
                 "started_at": self.started_at,
                 "finished_at": self.finished_at,
                 "options": _public_options(self.options),
             }
 
-        data.update(_read_replay_state(self.replay_path))
+        state_evaluation = data.get("evaluation")
+        replay_state = _read_replay_state(self.replay_path)
+        data.update(replay_state)
+        if state_evaluation:
+            data["evaluation"] = state_evaluation
+        elif replay_state.get("evaluation"):
+            data["evaluation"] = replay_state["evaluation"]
         return data
 
-    def start_job(self, task: str) -> tuple[bool, str]:
+    def start_job(self, task: str, template_id: str | None = None) -> tuple[bool, str]:
         task = task.strip()
         if not task:
             return False, "Task is empty"
+
+        criteria: dict[str, Any] | None = None
+        template_id = template_id.strip() if template_id else None
+        if template_id:
+            templates = load_task_templates(self.options.templates_file)
+            template = get_task_template(templates, template_id, self.options.device_type)
+            criteria = render_success_criteria(template)
 
         with self.lock:
             if self.running:
@@ -86,20 +106,22 @@ class WebConsoleState:
 
             self.running = True
             self.task = task
+            self.template_id = template_id
             self.result = None
             self.error = None
+            self.evaluation = None
             self.replay_path = None
             self.started_at = _now()
             self.finished_at = None
 
             self.job_thread = threading.Thread(
-                target=self._run_task, args=(task,), daemon=True
+                target=self._run_task, args=(task, criteria), daemon=True
             )
             self.job_thread.start()
 
         return True, "Task started"
 
-    def _run_task(self, task: str) -> None:
+    def _run_task(self, task: str, criteria: dict[str, Any] | None) -> None:
         agent: Any | None = None
         monitor_stop = threading.Event()
         monitor_thread: threading.Thread | None = None
@@ -112,9 +134,14 @@ class WebConsoleState:
             )
             monitor_thread.start()
             result = agent.run(task)
+            evaluation = None
+            if criteria and agent.replay_path:
+                report = evaluate_replay(agent.replay_path, criteria)
+                evaluation = save_evaluation_report(agent.replay_path, report)
             with self.lock:
                 self.result = result
                 self.replay_path = agent.replay_path
+                self.evaluation = evaluation
         except Exception as e:
             with self.lock:
                 self.error = str(e)
@@ -189,7 +216,13 @@ class WebConsoleHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/api/run":
             payload = self._read_json()
-            ok, message = self.console_state.start_job(str(payload.get("task", "")))
+            try:
+                ok, message = self.console_state.start_job(
+                    str(payload.get("task", "")),
+                    str(payload.get("template_id") or "").strip() or None,
+                )
+            except ValueError as e:
+                ok, message = False, str(e)
             status = HTTPStatus.ACCEPTED if ok else HTTPStatus.CONFLICT
             self._send_json({"ok": ok, "message": message}, status=status)
         elif parsed.path == "/api/doctor":
@@ -321,6 +354,7 @@ def _read_replay_state(replay_path: str | None) -> dict[str, Any]:
     metadata_path = run_dir / "metadata.json"
     steps_path = run_dir / "steps.json"
     metadata: dict[str, Any] | None = None
+    evaluation: dict[str, Any] | None = None
     steps: list[dict[str, Any]] = []
 
     try:
@@ -328,6 +362,9 @@ def _read_replay_state(replay_path: str | None) -> dict[str, Any]:
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         if steps_path.exists():
             steps = json.loads(steps_path.read_text(encoding="utf-8"))
+        evaluation_path = run_dir / "evaluation.json"
+        if evaluation_path.exists():
+            evaluation = json.loads(evaluation_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return {
             "replay": {
@@ -336,6 +373,7 @@ def _read_replay_state(replay_path: str | None) -> dict[str, Any]:
                 "index_url": f"/replays/{run_dir.name}/index.html",
                 "root": str(run_dir.parent),
             },
+            "evaluation": evaluation,
             "steps": [],
         }
 
@@ -353,6 +391,7 @@ def _read_replay_state(replay_path: str | None) -> dict[str, Any]:
             "index_url": f"/replays/{run_dir.name}/index.html",
             "root": str(replay_root),
         },
+        "evaluation": evaluation,
         "steps": steps,
     }
 
@@ -404,6 +443,9 @@ INDEX_HTML = """<!doctype html>
     pre { white-space: pre-wrap; word-break: break-word; background: #f6f8fa; border-radius: 6px; padding: 10px; max-height: 220px; overflow: auto; }
     .doctor-check { border-top: 1px solid #d8dee4; padding: 8px 0; font-size: 13px; }
     .doctor-check:first-child { border-top: 0; }
+    .evaluation { display: grid; gap: 8px; margin: 10px 0 16px; }
+    .eval-box { border: 1px solid #d8dee4; border-radius: 6px; padding: 10px; background: #f6f8fa; }
+    .eval-box strong { text-transform: uppercase; }
     .templates { display: grid; gap: 8px; margin-top: 10px; }
     .template { text-align: left; background: #f6f8fa; color: #1f2328; border: 1px solid #d0d7de; }
     .template span { display: block; font-size: 12px; color: #667085; font-weight: 400; margin-top: 4px; }
@@ -442,6 +484,7 @@ INDEX_HTML = """<!doctype html>
       <h2>运行状态</h2>
       <div id="summary" class="muted">等待任务。</div>
       <div id="replayLink" style="margin: 10px 0;"></div>
+      <div id="evaluation" class="evaluation"></div>
       <h2>步骤回放</h2>
       <div id="steps" class="steps muted">暂无步骤。</div>
     </section>
@@ -464,7 +507,7 @@ INDEX_HTML = """<!doctype html>
       const res = await fetch('/api/run', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({task})
+        body: JSON.stringify({task, template_id: window.selectedTemplateId || null})
       });
       const payload = await res.json();
       if (!payload.ok) alert(payload.message || '任务启动失败');
@@ -497,7 +540,31 @@ INDEX_HTML = """<!doctype html>
         <div><strong>Result:</strong> ${escapeHtml(state.result || state.error || (state.running ? 'Running...' : 'None'))}</div>
       `;
       document.getElementById('replayLink').innerHTML = state.replay ? `<a href="${state.replay.index_url}" target="_blank">打开完整回放 HTML</a><br><span class="muted">${escapeHtml(state.replay.path)}</span>` : '';
+      renderEvaluation(state.evaluation);
       renderSteps(state.steps || []);
+    }
+
+    function renderEvaluation(evaluation) {
+      const el = document.getElementById('evaluation');
+      if (!evaluation) {
+        el.innerHTML = '';
+        return;
+      }
+      const checks = evaluation.checks || [];
+      el.innerHTML = `
+        <div class="eval-box">
+          <strong class="${evaluation.status === 'passed' ? 'ok' : 'fail'}">${escapeHtml(evaluation.status)}</strong>
+          <div>Score: ${escapeHtml(evaluation.score)}/${escapeHtml(evaluation.max_score)}</div>
+          <div class="muted">${escapeHtml(evaluation.summary || '')}</div>
+        </div>
+        ${checks.map(check => `
+          <div class="eval-box">
+            <strong class="${check.status === 'passed' ? 'ok' : 'fail'}">[${escapeHtml(check.status)}]</strong>
+            ${escapeHtml(check.name)}: ${escapeHtml(check.points)}/${escapeHtml(check.max_points)}
+            <div class="muted">${escapeHtml(check.evidence || check.detail || '')}</div>
+          </div>
+        `).join('')}
+      `;
     }
 
     function renderSteps(steps) {
@@ -553,7 +620,10 @@ INDEX_HTML = """<!doctype html>
     function useTemplate(templateId) {
       const templates = window.betterglmTemplates || [];
       const template = templates.find(item => item.id === templateId);
-      if (template) document.getElementById('task').value = template.rendered_prompt || template.prompt || '';
+      if (template) {
+        window.selectedTemplateId = template.id;
+        document.getElementById('task').value = template.rendered_prompt || template.prompt || '';
+      }
     }
 
     function escapeHtml(value) {
@@ -562,6 +632,9 @@ INDEX_HTML = """<!doctype html>
 
     fetchState();
     fetchTemplates();
+    document.getElementById('task').addEventListener('input', () => {
+      window.selectedTemplateId = null;
+    });
     setInterval(fetchState, 1500);
   </script>
 </body>

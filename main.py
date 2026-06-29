@@ -32,6 +32,11 @@ from phone_agent.config.apps_ios import list_supported_apps as list_ios_apps
 from phone_agent.device_factory import DeviceType, get_device_factory, set_device_type
 from phone_agent.doctor import DoctorOptions, print_doctor_report, run_doctor
 from phone_agent.env import load_env_file
+from phone_agent.evaluator import (
+    evaluate_replay,
+    format_evaluation_report,
+    save_evaluation_report,
+)
 from phone_agent.model import ModelConfig
 from phone_agent.task_templates import (
     format_task_templates,
@@ -39,6 +44,7 @@ from phone_agent.task_templates import (
     load_task_templates,
     parse_template_vars,
     render_task_template,
+    render_success_criteria,
 )
 from phone_agent.web_console import WebConsoleOptions, run_web_console
 from phone_agent.xctest import XCTestConnection
@@ -405,6 +411,9 @@ Examples:
     # Run a template with variables
     python main.py --device-type ios --template ios_safari_weather --template-var city=上海
 
+    # Evaluate an existing replay
+    python main.py --device-type ios --template ios_safari_weather --evaluate-replay runs/<run-id>
+
     # iOS specific examples
     # Run with iOS device
     python main.py --device-type ios "Open Safari and search for iPhone tips"
@@ -560,6 +569,13 @@ Examples:
         type=str,
         default=os.getenv("PHONE_AGENT_TEMPLATES_FILE"),
         help="Optional JSON file with additional task templates",
+    )
+
+    parser.add_argument(
+        "--evaluate-replay",
+        type=str,
+        metavar="REPLAY_DIR",
+        help="Evaluate an existing replay directory using --template criteria",
     )
 
     parser.add_argument(
@@ -843,6 +859,7 @@ def main():
 
     resolved_task = args.task
     template = None
+    template_vars = {}
     if args.template:
         if args.task:
             print("Template error: use either a positional task or --template, not both.")
@@ -850,10 +867,21 @@ def main():
         try:
             template_vars = parse_template_vars(args.template_var)
             template = get_task_template(templates, args.template, args.device_type)
-            resolved_task = render_task_template(template, template_vars)
+            if not args.evaluate_replay:
+                resolved_task = render_task_template(template, template_vars)
         except ValueError as e:
             print(f"Template error: {e}")
             sys.exit(2)
+
+    if args.evaluate_replay:
+        if not template:
+            print("Evaluation error: --evaluate-replay requires --template.")
+            sys.exit(2)
+        criteria = render_success_criteria(template, template_vars)
+        report = evaluate_replay(args.evaluate_replay, criteria)
+        save_evaluation_report(args.evaluate_replay, report)
+        print(format_evaluation_report(report))
+        sys.exit(0 if report.status == "passed" else 1)
 
     # Handle --list-apps (no system check needed)
     if args.list_apps:
@@ -982,6 +1010,11 @@ def main():
         print(f"\nResult: {result}")
         if agent.replay_path:
             print(f"Replay: {agent.replay_path}/index.html")
+            if template:
+                criteria = render_success_criteria(template, template_vars)
+                report = evaluate_replay(agent.replay_path, criteria)
+                save_evaluation_report(agent.replay_path, report)
+                print(format_evaluation_report(report))
     else:
         # Interactive mode
         print("\nEntering interactive mode. Type 'quit' to exit.\n")

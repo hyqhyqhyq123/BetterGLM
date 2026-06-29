@@ -17,6 +17,7 @@ BetterGLM 为手机端 AI Agent 增加了环境诊断、运行回放、本地 We
 | 日志回放 | 任务失败后不知道哪一步出错 | 可观测性、问题复盘、质量评估 |
 | Web 控制台 | 命令行不适合面试演示和非技术用户试用 | 产品化包装、前后端集成、异步任务状态 |
 | 任务模板 | 每次临时输入任务，难以复现和对比 | 场景库、评测思维、演示标准化 |
+| 任务评分器 | 模型说完成不等于任务真的成功 | Agent 评测闭环、质量度量 |
 
 ## 架构概览
 
@@ -31,7 +32,9 @@ flowchart LR
     Agent --> Device["ADB / HDC / WDA"]
     Agent --> Replay["Replay Recorder"]
     Replay --> Artifacts["metadata.json / steps.json / screenshots / index.html"]
+    Replay --> Eval["Evaluation Report"]
     Web --> Replay
+    Web --> Eval
     CLI --> Doctor["Doctor Diagnostics"]
     Web --> Doctor
 ```
@@ -58,7 +61,9 @@ flowchart LR
 
 4. 在 Web 控制台中点击模板并运行任务。
 
-5. 打开回放 HTML，解释每一步截图、模型动作和执行结果。
+5. 查看评分结果，说明系统如何从回放证据判断 passed/failed。
+
+6. 打开回放 HTML，解释每一步截图、模型动作和执行结果。
 
 ## 命令行示例
 
@@ -71,6 +76,9 @@ python ios.py --templates-file examples/task_templates.json --template portfolio
 
 # 使用通用入口运行 iOS 设备
 python main.py --device-type ios --template ios_settings_wifi
+
+# 对已有回放重新评分
+python ios.py --template ios_safari_weather --template-var city=北京 --evaluate-replay runs/<run-id>
 ```
 
 ## 自定义任务模板格式
@@ -87,17 +95,46 @@ python main.py --device-type ios --template ios_settings_wifi
       "variables": {
         "city": "上海"
       },
-      "tags": ["portfolio", "browser", "ios"]
+      "tags": ["portfolio", "browser", "ios"],
+      "success_criteria": {
+        "must_contain_text": ["{city}", "天气"],
+        "target_app": "Safari",
+        "max_steps": 12,
+        "min_score": 80
+      }
     }
   ]
 }
+```
+
+## 评分器输出
+
+评分器会读取回放目录里的 `metadata.json` 和 `steps.json`，生成 `evaluation.json`。它不是再调用一次大模型，而是根据确定性规则检查：
+
+- 任务是否以 completed 状态结束
+- 步骤里是否有执行错误
+- 是否超过模板规定的最大步骤数
+- 最终 App 是否符合预期
+- 回放证据中是否出现成功关键词
+
+这能把 Agent 演示变成可度量的结果：
+
+```text
+Status: passed
+Score: 100/100
+Checks:
+- run_completed
+- no_step_errors
+- max_steps
+- target_app
+- must_contain_text
 ```
 
 ## 面试讲法
 
 可以这样介绍项目：
 
-> 我基于 Open-AutoGLM 做了一个手机 Agent 工程化 fork。原项目能完成手机自动化任务，但在真实部署、失败排查、演示复现方面比较弱。我补了 Doctor 诊断、iOS WiFi WDA 兼容、CLI 输入体验、模型动作解析失败重试、日志回放、本地 Web 控制台和任务模板。这个项目主要体现我对 AI Agent 工程落地的理解：不只是调模型，而是把模型调用、设备控制、异常处理、可观测性和演示产品化串起来。
+> 我基于 Open-AutoGLM 做了一个手机 Agent 工程化 fork。原项目能完成手机自动化任务，但在真实部署、失败排查、演示复现和结果评测方面比较弱。我补了 Doctor 诊断、iOS WiFi WDA 兼容、CLI 输入体验、模型动作解析失败重试、日志回放、本地 Web 控制台、任务模板和任务评分器。这个项目主要体现我对 AI Agent 工程落地的理解：不只是调模型，而是把模型调用、设备控制、异常处理、可观测性、评测和演示产品化串起来。
 
 ## 简历 bullet 参考
 
@@ -105,6 +142,7 @@ python main.py --device-type ios --template ios_settings_wifi
 - 设计并实现 Agent 运行回放系统，按步骤保存截图、模型思考、动作、执行结果和耗时，支持失败复盘和演示归档。
 - 实现无外部前端依赖的本地 Web 控制台，支持任务提交、Doctor 诊断、运行状态轮询、回放预览和任务模板选择。
 - 建立可复现任务模板机制，支持内置模板、自定义 JSON 模板和变量覆盖，用于标准化 demo、回归测试和作品集展示。
+- 实现基于回放证据的确定性评分器，输出 passed/failed、分数、检查项和 `evaluation.json`，用于 Agent 任务质量评估。
 
 ## 后续可继续开发
 
@@ -112,7 +150,7 @@ python main.py --device-type ios --template ios_settings_wifi
 | --- | --- |
 | 回放对比 | 比较两次任务的步骤差异，用于回归测试 |
 | 失败分类 | 把失败分成环境、模型、设备、权限、解析等类型 |
-| 任务评分 | 给模板任务加成功条件，形成轻量 benchmark |
+| 批量评测 | 一次执行多个模板并汇总成功率、耗时和失败原因 |
 | WebSocket 状态推送 | 减少轮询，让 Web 控制台更实时 |
 | 权限与隐私遮罩 | 对截图中的敏感区域做本地脱敏 |
 
