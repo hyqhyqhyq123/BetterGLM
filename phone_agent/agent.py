@@ -5,12 +5,13 @@ import traceback
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from phone_agent.actions import ActionHandler
-from phone_agent.actions.handler import do, finish, parse_action
+from phone_agent.actions import ActionHandler, ActionResult
+from phone_agent.actions.handler import parse_action
 from phone_agent.config import get_messages, get_system_prompt
 from phone_agent.device_factory import get_device_factory
 from phone_agent.model import ModelClient, ModelConfig
 from phone_agent.model.client import MessageBuilder
+from phone_agent.loop_guard import AgentLoopGuard
 from phone_agent.replay import ReplayRecorder
 
 
@@ -40,6 +41,7 @@ class StepResult:
     action: dict[str, Any] | None
     thinking: str
     message: str | None = None
+    status: str | None = None
 
 
 class PhoneAgent:
@@ -84,6 +86,7 @@ class PhoneAgent:
         self._context: list[dict[str, Any]] = []
         self._step_count = 0
         self._replay_recorder: ReplayRecorder | None = None
+        self._loop_guard = AgentLoopGuard()
 
     def run(self, task: str) -> str:
         """
@@ -97,6 +100,7 @@ class PhoneAgent:
         """
         self._context = []
         self._step_count = 0
+        self._loop_guard.reset()
         self._start_replay(task)
 
         # First step with user prompt
@@ -104,7 +108,10 @@ class PhoneAgent:
 
         if result.finished:
             final_message = result.message or "Task completed"
-            self._finish_replay(final_message)
+            self._finish_replay(
+                final_message,
+                status=result.status or ("completed" if result.success else "failed"),
+            )
             return final_message
 
         # Continue until finished or max steps reached
@@ -113,7 +120,10 @@ class PhoneAgent:
 
             if result.finished:
                 final_message = result.message or "Task completed"
-                self._finish_replay(final_message)
+                self._finish_replay(
+                    final_message,
+                    status=result.status or ("completed" if result.success else "failed"),
+                )
                 return final_message
 
         self._finish_replay("Max steps reached", status="max_steps")
@@ -142,6 +152,7 @@ class PhoneAgent:
         """Reset the agent state for a new task."""
         self._context = []
         self._step_count = 0
+        self._loop_guard.reset()
 
     def _execute_step(
         self, user_prompt: str | None = None, is_first: bool = False
@@ -202,6 +213,7 @@ class PhoneAgent:
                 action=None,
                 thinking="",
                 message=f"Model error: {e}",
+                status="failed",
             )
 
         # Parse action from response
@@ -261,17 +273,20 @@ class PhoneAgent:
 
         # Execute action
         execution_error = None
-        try:
-            result = self.action_handler.execute(
-                action, screenshot.width, screenshot.height
-            )
-        except Exception as e:
-            if self.agent_config.verbose:
-                traceback.print_exc()
-            execution_error = str(e)
-            result = self.action_handler.execute(
-                finish(message=str(e)), screenshot.width, screenshot.height
-            )
+        repeated_action_message = self._loop_guard.repeated_action_message(action)
+        if repeated_action_message:
+            execution_error = repeated_action_message
+            result = ActionResult(False, True, repeated_action_message)
+        else:
+            try:
+                result = self.action_handler.execute(
+                    action, screenshot.width, screenshot.height
+                )
+            except Exception as e:
+                if self.agent_config.verbose:
+                    traceback.print_exc()
+                execution_error = str(e)
+                result = ActionResult(False, True, f"Action failed: {e}")
 
         # Add assistant response to context
         self._context.append(
@@ -281,7 +296,17 @@ class PhoneAgent:
         )
 
         # Check if finished
-        finished = action.get("_metadata") == "finish" or result.should_finish
+        terminal_status = self._loop_guard.terminal_failure_status(
+            result.success, result.message
+        )
+        finished = (
+            action.get("_metadata") == "finish"
+            or result.should_finish
+            or terminal_status is not None
+        )
+        step_error = execution_error or (
+            result.message if not result.success and finished else None
+        )
         self._record_replay_step(
             current_app=current_app,
             screen_info=screen_info,
@@ -292,7 +317,7 @@ class PhoneAgent:
             action_result=result,
             finished=finished,
             message=result.message or action.get("message"),
-            error=execution_error,
+            error=step_error,
             model_metrics=self._model_metrics(response),
         )
 
@@ -310,6 +335,7 @@ class PhoneAgent:
             action=action,
             thinking=response.thinking,
             message=result.message or action.get("message"),
+            status=terminal_status or ("failed" if finished and not result.success else None),
         )
 
     @property

@@ -53,6 +53,8 @@ def classify_failure(
             continue
         if "parse" in text or "failed to parse" in text:
             return "model_parse_error"
+        if "repeated action loop" in text:
+            return "repeated_action_loop"
         if "wda" in text or "webdriveragent" in text or "connection" in text:
             return "wda_error"
         if "app not found" in text or "not installed" in text:
