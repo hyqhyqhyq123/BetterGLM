@@ -121,6 +121,17 @@ python ios.py --template ios_safari_weather \
 
 评分器会读取 `metadata.json` 和 `steps.json`，输出 `evaluation.json`，并把评分摘要写回回放元数据。它默认检查任务是否完成、步骤中是否有错误、是否超过最大步骤数、最终 App 是否匹配，以及回放证据里是否包含模板要求的关键词。
 
+生成作品集指标报告：
+
+```bash
+python scripts/replay_metrics.py \
+  --runs runs \
+  --output docs/betterglm_metrics_report.md \
+  --json-output docs/betterglm_metrics_report.json
+```
+
+报告会统计模板覆盖、评分通过率、平均分、平均步数、失败类型、回放完整率、截图覆盖率和坐标审计覆盖率。示例报告见：[BetterGLM 指标报告](docs/betterglm_metrics_report.md)。
+
 点击精度优化：
 
 - 模型仍然输出 `0-1000` 归一化坐标，便于跨设备泛化。

@@ -152,6 +152,19 @@ Web 控制台会扫描 `runs/web` 下的回放目录，并通过 `/api/history` 
 
 > 我把单次 demo 变成了一个可持续观察的质量看板。每次 Web 控制台运行都会沉淀为 replay artifact，Dashboard 再按评分通过率、平均步数和失败类型汇总，帮助判断问题是环境、模型输出、坐标执行还是任务定义本身。
 
+## 指标报告
+
+项目提供 `scripts/replay_metrics.py`，可以把本地回放目录转换成作品集指标报告：
+
+```bash
+python scripts/replay_metrics.py \
+  --runs runs \
+  --output docs/betterglm_metrics_report.md \
+  --json-output docs/betterglm_metrics_report.json
+```
+
+当前样例报告见：[BetterGLM 指标报告](betterglm_metrics_report.md)。这份报告基于真实 iPhone 任务回放，展示了模板覆盖、评分通过率、平均分、平均步数、失败类型、回放完整率、截图覆盖率和坐标审计覆盖率。
+
 ## 点击精度优化
 
 手机 Agent 的“点不准”通常不是一个单点问题，而是链路问题：
