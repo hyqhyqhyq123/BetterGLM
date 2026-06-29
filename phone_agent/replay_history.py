@@ -39,8 +39,13 @@ def classify_failure(
         return None
 
     status = str(metadata.get("status") or "")
+    result_text = str(metadata.get("result") or "").lower()
     if status == "cancelled":
         return "user_cancelled"
+    if status == "wda_error" or _looks_like_wda_error(result_text):
+        return "wda_error"
+    if "manual takeover required" in result_text:
+        return "manual_takeover_required"
     if status == "completed" and not evaluation:
         return None
 
@@ -55,8 +60,10 @@ def classify_failure(
             return "model_parse_error"
         if "repeated action loop" in text:
             return "repeated_action_loop"
-        if "wda" in text or "webdriveragent" in text or "connection" in text:
+        if _looks_like_wda_error(text):
             return "wda_error"
+        if "manual takeover required" in text or "take_over" in text:
+            return "manual_takeover_required"
         if "app not found" in text or "not installed" in text:
             return _classify_app_not_found_text(text)
         if "coordinate" in text or ("tap" in text and "failed" in text):
@@ -111,6 +118,15 @@ def _looks_like_launch_failure(failed_checks: list[dict[str, Any]]) -> bool:
         if "system home" in evidence or "unknown" in evidence:
             return True
     return False
+
+
+def _looks_like_wda_error(text: str) -> bool:
+    return (
+        "wda" in text
+        or "webdriveragent" in text
+        or "connection reset" in text
+        or "connection aborted" in text
+    )
 
 
 def _classify_app_not_found_text(text: str) -> str:

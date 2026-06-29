@@ -83,9 +83,10 @@ class IOSPhoneAgent:
 
         # Initialize WDA connection and create session if needed
         self.wda_connection = XCTestConnection(wda_url=self.agent_config.wda_url)
+        self._wda_ready_at_startup = self.wda_connection.is_wda_ready(timeout=2)
 
         # Auto-create session if not provided
-        if self.agent_config.session_id is None:
+        if self.agent_config.session_id is None and self._wda_ready_at_startup:
             success, session_id = self.wda_connection.start_wda_session()
             if success and session_id != "session_started":
                 self.agent_config.session_id = session_id
@@ -93,6 +94,8 @@ class IOSPhoneAgent:
                     print(f"✅ Created WDA session: {session_id}")
             elif self.agent_config.verbose:
                 print(f"⚠️  Using default WDA session (no explicit session ID)")
+        elif self.agent_config.session_id is None and self.agent_config.verbose:
+            print(f"⚠️  WebDriverAgent is not reachable: {self.agent_config.wda_url}")
 
         self.action_handler = IOSActionHandler(
             wda_url=self.agent_config.wda_url,
@@ -128,6 +131,8 @@ class IOSPhoneAgent:
 
         if self.is_cancel_requested():
             return self._finish_cancelled_run()
+        if not self._is_wda_ready():
+            return self._finish_wda_error()
 
         # First step with user prompt
         result = self._execute_step(task, is_first=True)
@@ -198,6 +203,8 @@ class IOSPhoneAgent:
         """Execute a single step of the agent loop."""
         if self.is_cancel_requested():
             return self._cancelled_step_result()
+        if not self._is_wda_ready():
+            return self._wda_error_step_result()
 
         self._step_count += 1
 
@@ -467,6 +474,11 @@ class IOSPhoneAgent:
         self._finish_replay(message, status="cancelled")
         return message
 
+    def _finish_wda_error(self) -> str:
+        message = self._wda_error_message()
+        self._finish_replay(message, status="wda_error")
+        return message
+
     def _cancelled_step_result(self) -> StepResult:
         return StepResult(
             success=False,
@@ -477,12 +489,32 @@ class IOSPhoneAgent:
             status="cancelled",
         )
 
+    def _wda_error_step_result(self) -> StepResult:
+        return StepResult(
+            success=False,
+            finished=True,
+            action=None,
+            thinking="",
+            message=self._wda_error_message(),
+            status="wda_error",
+        )
+
     def _record_cancelled_step(self, **kwargs) -> None:
         self._record_replay_step(
             finished=True,
             message=_cancel_message(),
             error=_cancel_message(),
             **kwargs,
+        )
+
+    def _is_wda_ready(self) -> bool:
+        return self.wda_connection.is_wda_ready(timeout=2)
+
+    def _wda_error_message(self) -> str:
+        return (
+            "WebDriverAgent is not reachable. "
+            f"Check WDA_URL={self.agent_config.wda_url}, Xcode test status, "
+            "USB iproxy, or WiFi connectivity."
         )
 
     def _record_replay_step(self, **kwargs) -> None:

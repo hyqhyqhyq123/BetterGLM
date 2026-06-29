@@ -159,7 +159,7 @@ class WebConsoleState:
             monitor_thread.start()
             result = agent.run(task, preserve_cancel=True)
             evaluation = None
-            if criteria and agent.replay_path and result != "Task cancelled by user":
+            if criteria and agent.replay_path and _should_evaluate_result(result):
                 report = evaluate_replay(agent.replay_path, criteria)
                 evaluation = save_evaluation_report(agent.replay_path, report)
             with self.lock:
@@ -365,7 +365,12 @@ def _build_agent(options: WebConsoleOptions):
             lang=options.lang,
             replay_dir=options.replay_dir,
         )
-        return IOSPhoneAgent(model_config=model_config, agent_config=agent_config)
+        return IOSPhoneAgent(
+            model_config=model_config,
+            agent_config=agent_config,
+            confirmation_callback=_web_confirmation_callback,
+            takeover_callback=_web_takeover_callback,
+        )
 
     device_type = DeviceType.HDC if options.device_type == "hdc" else DeviceType.ADB
     set_device_type(device_type)
@@ -377,7 +382,34 @@ def _build_agent(options: WebConsoleOptions):
         lang=options.lang,
         replay_dir=options.replay_dir,
     )
-    return PhoneAgent(model_config=model_config, agent_config=agent_config)
+    return PhoneAgent(
+        model_config=model_config,
+        agent_config=agent_config,
+        confirmation_callback=_web_confirmation_callback,
+        takeover_callback=_web_takeover_callback,
+    )
+
+
+def _web_confirmation_callback(message: str) -> bool:
+    print(f"Web console blocked sensitive operation: {message}")
+    return False
+
+
+def _web_takeover_callback(message: str) -> None:
+    raise RuntimeError(f"Manual takeover required in Web console: {message}")
+
+
+def _should_evaluate_result(result: str | None) -> bool:
+    if not result:
+        return True
+    lowered = result.lower()
+    blocked_prefixes = (
+        "task cancelled by user",
+        "webdriveragent is not reachable",
+        "manual takeover required",
+        "action failed: manual takeover required",
+    )
+    return not any(lowered.startswith(prefix) for prefix in blocked_prefixes)
 
 
 def _read_replay_state(replay_path: str | None) -> dict[str, Any]:
