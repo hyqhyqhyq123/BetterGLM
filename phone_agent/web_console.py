@@ -19,6 +19,7 @@ from phone_agent.device_factory import DeviceType, set_device_type
 from phone_agent.doctor import DoctorOptions, run_doctor
 from phone_agent.evaluator import evaluate_replay, save_evaluation_report
 from phone_agent.model import ModelConfig
+from phone_agent.replay_history import build_replay_history
 from phone_agent.task_templates import (
     filter_task_templates,
     get_task_template,
@@ -207,6 +208,10 @@ class WebConsoleHandler(BaseHTTPRequestHandler):
                     {"templates": [], "error": str(e)},
                     status=HTTPStatus.INTERNAL_SERVER_ERROR,
                 )
+        elif parsed.path == "/api/history":
+            self._send_json(
+                build_replay_history(self.console_state.options.replay_dir)
+            )
         elif parsed.path.startswith("/replays/"):
             self._send_replay_file(parsed.path)
         else:
@@ -442,6 +447,13 @@ INDEX_HTML = """<!doctype html>
     .step img { width: 100%; border-radius: 6px; border: 1px solid #d8dee4; background: #111; }
     .coord { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin: 8px 0; }
     .coord div { background: #f6f8fa; border: 1px solid #d8dee4; border-radius: 6px; padding: 8px; font-size: 12px; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; margin: 10px 0 14px; }
+    .stat { background: #f6f8fa; border: 1px solid #d8dee4; border-radius: 6px; padding: 10px; }
+    .stat strong { display: block; font-size: 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-top: 1px solid #d8dee4; padding: 8px 6px; text-align: left; vertical-align: top; }
+    th { color: #57606a; font-weight: 600; }
+    .history-task { max-width: 340px; }
     pre { white-space: pre-wrap; word-break: break-word; background: #f6f8fa; border-radius: 6px; padding: 10px; max-height: 220px; overflow: auto; }
     .doctor-check { border-top: 1px solid #d8dee4; padding: 8px 0; font-size: 13px; }
     .doctor-check:first-child { border-top: 0; }
@@ -483,6 +495,9 @@ INDEX_HTML = """<!doctype html>
       </section>
     </div>
     <section>
+      <h2>历史 Dashboard</h2>
+      <div id="historyStats" class="stats"></div>
+      <div id="historyRuns" class="muted">加载历史记录...</div>
       <h2>运行状态</h2>
       <div id="summary" class="muted">等待任务。</div>
       <div id="replayLink" style="margin: 10px 0;"></div>
@@ -492,6 +507,8 @@ INDEX_HTML = """<!doctype html>
     </section>
   </main>
   <script>
+    let lastHistoryKey = null;
+
     async function fetchState() {
       const res = await fetch('/api/state');
       const state = await res.json();
@@ -502,6 +519,12 @@ INDEX_HTML = """<!doctype html>
       const res = await fetch('/api/templates');
       const payload = await res.json();
       renderTemplates(payload.templates || []);
+    }
+
+    async function fetchHistory() {
+      const res = await fetch('/api/history');
+      const payload = await res.json();
+      renderHistory(payload);
     }
 
     async function runTask() {
@@ -544,6 +567,65 @@ INDEX_HTML = """<!doctype html>
       document.getElementById('replayLink').innerHTML = state.replay ? `<a href="${state.replay.index_url}" target="_blank">打开完整回放 HTML</a><br><span class="muted">${escapeHtml(state.replay.path)}</span>` : '';
       renderEvaluation(state.evaluation);
       renderSteps(state.steps || []);
+      const historyKey = [
+        state.running,
+        state.replay_path || '',
+        state.finished_at || '',
+        state.error || ''
+      ].join('|');
+      if (!state.running && historyKey !== lastHistoryKey) {
+        lastHistoryKey = historyKey;
+        fetchHistory();
+      }
+    }
+
+    function renderHistory(payload) {
+      const summary = payload.summary || {};
+      const runs = payload.runs || [];
+      document.getElementById('historyStats').innerHTML = [
+        ['总任务', summary.total ?? 0],
+        ['已评分', summary.evaluated ?? 0],
+        ['评分通过率', `${summary.success_rate ?? 0}%`],
+        ['未评分完成', summary.completed_unscored ?? 0],
+        ['平均分', summary.avg_score ?? '-'],
+        ['平均步数', summary.avg_steps ?? '-']
+      ].map(([label, value]) => `
+        <div class="stat"><span class="muted">${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>
+      `).join('');
+
+      const el = document.getElementById('historyRuns');
+      if (!runs.length) {
+        el.textContent = '暂无历史任务。';
+        el.className = 'muted';
+        return;
+      }
+      el.className = '';
+      el.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>状态</th>
+              <th>分数</th>
+              <th>步数</th>
+              <th>失败类型</th>
+              <th>任务</th>
+              <th>回放</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${runs.map(run => `
+              <tr>
+                <td class="${run.status === 'passed' ? 'ok' : run.failure_type ? 'fail' : 'warn'}">${escapeHtml(run.status || '-')}</td>
+                <td>${escapeHtml(run.score ?? '-')}</td>
+                <td>${escapeHtml(run.steps ?? '-')}</td>
+                <td>${escapeHtml(run.failure_type || '-')}</td>
+                <td class="history-task">${escapeHtml(run.task || run.run_id || '')}</td>
+                <td><a href="${run.index_url}" target="_blank">打开</a></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
     }
 
     function renderEvaluation(evaluation) {
