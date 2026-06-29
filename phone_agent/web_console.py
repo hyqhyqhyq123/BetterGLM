@@ -440,6 +440,8 @@ INDEX_HTML = """<!doctype html>
     .step { display: grid; grid-template-columns: minmax(180px, 280px) 1fr; gap: 14px; border-top: 1px solid #d8dee4; padding-top: 14px; }
     .step:first-child { border-top: 0; padding-top: 0; }
     .step img { width: 100%; border-radius: 6px; border: 1px solid #d8dee4; background: #111; }
+    .coord { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin: 8px 0; }
+    .coord div { background: #f6f8fa; border: 1px solid #d8dee4; border-radius: 6px; padding: 8px; font-size: 12px; }
     pre { white-space: pre-wrap; word-break: break-word; background: #f6f8fa; border-radius: 6px; padding: 10px; max-height: 220px; overflow: auto; }
     .doctor-check { border-top: 1px solid #d8dee4; padding: 8px 0; font-size: 13px; }
     .doctor-check:first-child { border-top: 0; }
@@ -582,10 +584,26 @@ INDEX_HTML = """<!doctype html>
             <h3>Step ${step.step}</h3>
             <div class="muted">${escapeHtml(step.current_app || '')} | ${escapeHtml(step.timestamp || '')}</div>
             <pre>${escapeHtml(step.raw_action || '')}</pre>
+            ${renderCoordinate(step)}
             <pre>${escapeHtml(JSON.stringify(step.action_result || {}, null, 2))}</pre>
           </div>
         </div>
       `).join('');
+    }
+
+    function renderCoordinate(step) {
+      const metadata = step.action_result && step.action_result.metadata;
+      const coordinate = metadata && (metadata.coordinate || metadata.start_coordinate);
+      if (!coordinate) return '';
+      const target = coordinate.target_point || coordinate.transport_coordinate || [];
+      return `
+        <div class="coord">
+          <div><strong>Model</strong><br>${escapeHtml(JSON.stringify(coordinate.model_coordinate || []))}</div>
+          <div><strong>Screenshot</strong><br>${escapeHtml(JSON.stringify(coordinate.screenshot_pixel || []))}</div>
+          <div><strong>Target</strong><br>${escapeHtml(JSON.stringify(target))}</div>
+          <div><strong>Strategy</strong><br>${escapeHtml(coordinate.strategy || '')}</div>
+        </div>
+      `;
     }
 
     function renderDoctor(report) {

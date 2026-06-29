@@ -4,10 +4,11 @@ import ast
 import re
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from phone_agent.config.timing import TIMING_CONFIG
+from phone_agent.coordinate import CoordinateAudit, CoordinateMapper
 from phone_agent.device_factory import get_device_factory
 
 
@@ -19,6 +20,7 @@ class ActionResult:
     should_finish: bool
     message: str | None = None
     requires_confirmation: bool = False
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class ActionHandler:
@@ -107,13 +109,15 @@ class ActionHandler:
         }
         return handlers.get(action_name)
 
-    def _convert_relative_to_absolute(
+    def _map_coordinate(
         self, element: list[int], screen_width: int, screen_height: int
-    ) -> tuple[int, int]:
-        """Convert relative coordinates (0-1000) to absolute pixels."""
-        x = int(element[0] / 1000 * screen_width)
-        y = int(element[1] / 1000 * screen_height)
-        return x, y
+    ) -> CoordinateAudit:
+        """Map relative coordinates (0-1000) to absolute pixels."""
+        return CoordinateMapper(
+            screenshot_width=screen_width,
+            screenshot_height=screen_height,
+            strategy="screenshot_pixels",
+        ).map(element)
 
     def _handle_launch(self, action: dict, width: int, height: int) -> ActionResult:
         """Handle app launch action."""
@@ -133,7 +137,8 @@ class ActionHandler:
         if not element:
             return ActionResult(False, False, "No element coordinates")
 
-        x, y = self._convert_relative_to_absolute(element, width, height)
+        coordinate = self._map_coordinate(element, width, height)
+        x, y = coordinate.transport_coordinate
 
         # Check for sensitive operation
         if "message" in action:
@@ -146,7 +151,7 @@ class ActionHandler:
 
         device_factory = get_device_factory()
         device_factory.tap(x, y, self.device_id)
-        return ActionResult(True, False)
+        return ActionResult(True, False, metadata={"coordinate": coordinate.to_dict()})
 
     def _handle_type(self, action: dict, width: int, height: int) -> ActionResult:
         """Handle text input action."""
@@ -180,12 +185,21 @@ class ActionHandler:
         if not start or not end:
             return ActionResult(False, False, "Missing swipe coordinates")
 
-        start_x, start_y = self._convert_relative_to_absolute(start, width, height)
-        end_x, end_y = self._convert_relative_to_absolute(end, width, height)
+        start_coordinate = self._map_coordinate(start, width, height)
+        end_coordinate = self._map_coordinate(end, width, height)
+        start_x, start_y = start_coordinate.transport_coordinate
+        end_x, end_y = end_coordinate.transport_coordinate
 
         device_factory = get_device_factory()
         device_factory.swipe(start_x, start_y, end_x, end_y, device_id=self.device_id)
-        return ActionResult(True, False)
+        return ActionResult(
+            True,
+            False,
+            metadata={
+                "start_coordinate": start_coordinate.to_dict(),
+                "end_coordinate": end_coordinate.to_dict(),
+            },
+        )
 
     def _handle_back(self, action: dict, width: int, height: int) -> ActionResult:
         """Handle back button action."""
@@ -205,10 +219,11 @@ class ActionHandler:
         if not element:
             return ActionResult(False, False, "No element coordinates")
 
-        x, y = self._convert_relative_to_absolute(element, width, height)
+        coordinate = self._map_coordinate(element, width, height)
+        x, y = coordinate.transport_coordinate
         device_factory = get_device_factory()
         device_factory.double_tap(x, y, self.device_id)
-        return ActionResult(True, False)
+        return ActionResult(True, False, metadata={"coordinate": coordinate.to_dict()})
 
     def _handle_long_press(self, action: dict, width: int, height: int) -> ActionResult:
         """Handle long press action."""
@@ -216,10 +231,11 @@ class ActionHandler:
         if not element:
             return ActionResult(False, False, "No element coordinates")
 
-        x, y = self._convert_relative_to_absolute(element, width, height)
+        coordinate = self._map_coordinate(element, width, height)
+        x, y = coordinate.transport_coordinate
         device_factory = get_device_factory()
         device_factory.long_press(x, y, device_id=self.device_id)
-        return ActionResult(True, False)
+        return ActionResult(True, False, metadata={"coordinate": coordinate.to_dict()})
 
     def _handle_wait(self, action: dict, width: int, height: int) -> ActionResult:
         """Handle wait action."""

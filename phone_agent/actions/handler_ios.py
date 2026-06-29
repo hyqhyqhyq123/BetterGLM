@@ -1,9 +1,10 @@
 """Action handler for iOS automation using WebDriverAgent."""
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from phone_agent.coordinate import CoordinateAudit, CoordinateMapper
 from phone_agent.xctest import (
     back,
     double_tap,
@@ -13,6 +14,7 @@ from phone_agent.xctest import (
     swipe,
     tap,
 )
+from phone_agent.xctest.device import SCALE_FACTOR, get_screen_size
 from phone_agent.xctest.input import clear_text, hide_keyboard, type_text
 
 
@@ -24,6 +26,7 @@ class ActionResult:
     should_finish: bool
     message: str | None = None
     requires_confirmation: bool = False
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class IOSActionHandler:
@@ -49,6 +52,7 @@ class IOSActionHandler:
         self.session_id = session_id
         self.confirmation_callback = confirmation_callback or self._default_confirmation
         self.takeover_callback = takeover_callback or self._default_takeover
+        self._target_size: tuple[int, int] | None = None
 
     def execute(
         self, action: dict[str, Any], screen_width: int, screen_height: int
@@ -115,13 +119,26 @@ class IOSActionHandler:
         }
         return handlers.get(action_name)
 
-    def _convert_relative_to_absolute(
+    def _map_coordinate(
         self, element: list[int], screen_width: int, screen_height: int
-    ) -> tuple[int, int]:
-        """Convert relative coordinates (0-1000) to absolute pixels."""
-        x = int(element[0] / 1000 * screen_width)
-        y = int(element[1] / 1000 * screen_height)
-        return x, y
+    ) -> CoordinateAudit:
+        """Map model coordinates to WDA-calibrated transport coordinates."""
+        target_width, target_height = self._get_target_size()
+        return CoordinateMapper(
+            screenshot_width=screen_width,
+            screenshot_height=screen_height,
+            target_width=target_width,
+            target_height=target_height,
+            transport_scale=SCALE_FACTOR,
+            strategy="wda_window_calibrated",
+        ).map(element)
+
+    def _get_target_size(self) -> tuple[int, int]:
+        if self._target_size is None:
+            self._target_size = get_screen_size(
+                wda_url=self.wda_url, session_id=self.session_id
+            )
+        return self._target_size
 
     def _handle_launch(self, action: dict, width: int, height: int) -> ActionResult:
         """Handle app launch action."""
@@ -142,9 +159,14 @@ class IOSActionHandler:
         if not element:
             return ActionResult(False, False, "No element coordinates")
 
-        x, y = self._convert_relative_to_absolute(element, width, height)
+        coordinate = self._map_coordinate(element, width, height)
+        x, y = coordinate.transport_coordinate
 
-        print(f"Physically tap on ({x}, {y})")
+        print(
+            "Physically tap on "
+            f"{coordinate.target_point or coordinate.transport_coordinate} "
+            f"via {coordinate.transport_coordinate}"
+        )
 
         # Check for sensitive operation
         if "message" in action:
@@ -156,7 +178,7 @@ class IOSActionHandler:
                 )
 
         tap(x, y, wda_url=self.wda_url, session_id=self.session_id)
-        return ActionResult(True, False)
+        return ActionResult(True, False, metadata={"coordinate": coordinate.to_dict()})
 
     def _handle_type(self, action: dict, width: int, height: int) -> ActionResult:
         """Handle text input action."""
@@ -183,10 +205,16 @@ class IOSActionHandler:
         if not start or not end:
             return ActionResult(False, False, "Missing swipe coordinates")
 
-        start_x, start_y = self._convert_relative_to_absolute(start, width, height)
-        end_x, end_y = self._convert_relative_to_absolute(end, width, height)
+        start_coordinate = self._map_coordinate(start, width, height)
+        end_coordinate = self._map_coordinate(end, width, height)
+        start_x, start_y = start_coordinate.transport_coordinate
+        end_x, end_y = end_coordinate.transport_coordinate
 
-        print(f"Physically scroll from ({start_x}, {start_y}) to ({end_x}, {end_y})")
+        print(
+            "Physically scroll from "
+            f"{start_coordinate.target_point or start_coordinate.transport_coordinate} "
+            f"to {end_coordinate.target_point or end_coordinate.transport_coordinate}"
+        )
 
         swipe(
             start_x,
@@ -196,7 +224,14 @@ class IOSActionHandler:
             wda_url=self.wda_url,
             session_id=self.session_id,
         )
-        return ActionResult(True, False)
+        return ActionResult(
+            True,
+            False,
+            metadata={
+                "start_coordinate": start_coordinate.to_dict(),
+                "end_coordinate": end_coordinate.to_dict(),
+            },
+        )
 
     def _handle_back(self, action: dict, width: int, height: int) -> ActionResult:
         """Handle back gesture (swipe from left edge)."""
@@ -214,9 +249,10 @@ class IOSActionHandler:
         if not element:
             return ActionResult(False, False, "No element coordinates")
 
-        x, y = self._convert_relative_to_absolute(element, width, height)
+        coordinate = self._map_coordinate(element, width, height)
+        x, y = coordinate.transport_coordinate
         double_tap(x, y, wda_url=self.wda_url, session_id=self.session_id)
-        return ActionResult(True, False)
+        return ActionResult(True, False, metadata={"coordinate": coordinate.to_dict()})
 
     def _handle_long_press(self, action: dict, width: int, height: int) -> ActionResult:
         """Handle long press action."""
@@ -224,7 +260,8 @@ class IOSActionHandler:
         if not element:
             return ActionResult(False, False, "No element coordinates")
 
-        x, y = self._convert_relative_to_absolute(element, width, height)
+        coordinate = self._map_coordinate(element, width, height)
+        x, y = coordinate.transport_coordinate
         long_press(
             x,
             y,
@@ -232,7 +269,7 @@ class IOSActionHandler:
             wda_url=self.wda_url,
             session_id=self.session_id,
         )
-        return ActionResult(True, False)
+        return ActionResult(True, False, metadata={"coordinate": coordinate.to_dict()})
 
     def _handle_wait(self, action: dict, width: int, height: int) -> ActionResult:
         """Handle wait action."""

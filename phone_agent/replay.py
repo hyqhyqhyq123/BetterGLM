@@ -136,6 +136,7 @@ class ReplayRecorder:
     .muted {{ color: #667085; }}
     .ok {{ color: #137333; }}
     .fail {{ color: #b42318; }}
+    .coord {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }}
     @media (max-width: 760px) {{ .step {{ grid-template-columns: 1fr; }} main {{ padding: 14px; }} }}
   </style>
 </head>
@@ -168,6 +169,7 @@ class ReplayRecorder:
         action = json.dumps(step.get("parsed_action"), ensure_ascii=False, indent=2)
         result = json.dumps(step.get("action_result"), ensure_ascii=False, indent=2)
         metrics = json.dumps(step.get("model_metrics"), ensure_ascii=False, indent=2)
+        coordinate_html = self._render_coordinate_audit(step)
         return f"""<section class="step">
   <div>
     <h2>Step {step["step"]}</h2>
@@ -184,10 +186,30 @@ class ReplayRecorder:
     <pre>{html.escape(action)}</pre>
     <h3>Execution Result</h3>
     <pre>{html.escape(result)}</pre>
+    {coordinate_html}
     <h3>Model Metrics</h3>
     <pre>{html.escape(metrics)}</pre>
   </div>
 </section>"""
+
+    def _render_coordinate_audit(self, step: dict[str, Any]) -> str:
+        result = step.get("action_result") or {}
+        metadata = result.get("metadata") if isinstance(result, dict) else None
+        if not isinstance(metadata, dict):
+            return ""
+
+        coordinate = metadata.get("coordinate") or metadata.get("start_coordinate")
+        if not isinstance(coordinate, dict):
+            return ""
+
+        target = coordinate.get("target_point") or coordinate.get("transport_coordinate")
+        return f"""<h3>Coordinate Audit</h3>
+    <div class="coord">
+      <div class="box"><strong>Model</strong><br>{html.escape(str(coordinate.get("model_coordinate")))}</div>
+      <div class="box"><strong>Screenshot</strong><br>{html.escape(str(coordinate.get("screenshot_pixel")))}</div>
+      <div class="box"><strong>Target</strong><br>{html.escape(str(target))}</div>
+      <div class="box"><strong>Strategy</strong><br>{html.escape(str(coordinate.get("strategy")))}</div>
+    </div>"""
 
 
 def _to_plain_dict(value: Any) -> Any:

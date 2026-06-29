@@ -11,6 +11,7 @@ from phone_agent.xctest.device import (
     back,
     double_tap,
     get_current_app,
+    get_screen_size,
     home,
     launch_app,
     long_press,
@@ -31,6 +32,7 @@ __all__ = [
     "clear_text",
     # Device control
     "get_current_app",
+    "get_screen_size",
     "tap",
     "swipe",
     "back",
