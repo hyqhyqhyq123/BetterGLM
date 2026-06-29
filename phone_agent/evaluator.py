@@ -93,7 +93,7 @@ def evaluate_replay(
         checks.append(
             _check(
                 "target_app",
-                str(target_app).lower() in final_app.lower(),
+                _target_app_matches(str(target_app), final_app),
                 15,
                 f"Final app should be {target_app}.",
                 f"final_app={final_app or 'unknown'}",
@@ -251,7 +251,7 @@ def _load_json(path: Path, default: Any) -> Any:
 
 def _build_text_corpus(metadata: dict[str, Any], steps: list[dict[str, Any]]) -> str:
     chunks: list[str] = []
-    for key in ("task", "result", "status"):
+    for key in ("result",):
         if metadata.get(key):
             chunks.append(str(metadata[key]))
 
@@ -259,8 +259,6 @@ def _build_text_corpus(metadata: dict[str, Any], steps: list[dict[str, Any]]) ->
         for key in (
             "current_app",
             "screen_info",
-            "thinking",
-            "raw_action",
             "message",
             "error",
         ):
@@ -273,3 +271,32 @@ def _build_text_corpus(metadata: dict[str, Any], steps: list[dict[str, Any]]) ->
                 chunks.append(json.dumps(value, ensure_ascii=False))
 
     return "\n".join(chunks)
+
+
+_TARGET_APP_ALIASES = (
+    {"settings", "设置", "系统设置", "preferences"},
+    {"safari", "mobile safari", "浏览器"},
+    {"notes", "备忘录"},
+    {"bilibili", "哔哩哔哩", "哔哩", "b站"},
+    {"amap", "高德", "高德地图"},
+    {"luckin coffee", "luckincoffee", "luckin", "瑞幸", "瑞幸咖啡"},
+)
+
+
+def _target_app_matches(expected: str, actual: str) -> bool:
+    expected_norm = _normalize_text(expected)
+    actual_norm = _normalize_text(actual)
+    if not expected_norm or not actual_norm:
+        return False
+    if expected_norm in actual_norm or actual_norm in expected_norm:
+        return True
+
+    for alias_group in _TARGET_APP_ALIASES:
+        normalized_group = {_normalize_text(value) for value in alias_group}
+        if expected_norm in normalized_group and actual_norm in normalized_group:
+            return True
+    return False
+
+
+def _normalize_text(value: str) -> str:
+    return " ".join(str(value).strip().lower().split())

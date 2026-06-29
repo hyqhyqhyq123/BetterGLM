@@ -200,6 +200,34 @@ APP_PACKAGES_IOS: dict[str, str] = {
     "Keynote 讲演": "com.apple.Keynote",
 }
 
+APP_ALIASES_IOS: dict[str, str] = {
+    "safari": "Safari",
+    "mobile safari": "Safari",
+    "浏览器": "Safari",
+    "设置": "设置",
+    "系统设置": "设置",
+    "settings": "设置",
+    "preferences": "设置",
+    "ios settings": "设置",
+    "notes": "备忘录",
+    "备忘录": "备忘录",
+    "luckin": "Luckin Coffee",
+    "luckin coffee": "Luckin Coffee",
+    "luckincoffee": "Luckin Coffee",
+    "瑞幸": "Luckin Coffee",
+    "瑞幸咖啡": "Luckin Coffee",
+    "bilibili": "哔哩哔哩",
+    "b站": "哔哩哔哩",
+    "哔哩": "哔哩哔哩",
+    "amap": "高德地图",
+    "高德": "高德地图",
+    "alipay": "支付宝",
+    "taobao": "淘宝",
+    "jd": "京东",
+    "weibo": "微博",
+    "zhihu": "知乎",
+}
+
 
 def get_bundle_id(app_name: str) -> str | None:
     """
@@ -211,7 +239,29 @@ def get_bundle_id(app_name: str) -> str | None:
     Returns:
         The iOS bundle ID, or None if not found.
     """
-    return APP_PACKAGES_IOS.get(app_name)
+    if not app_name:
+        return None
+
+    app_name = str(app_name).strip()
+    if app_name in APP_PACKAGES_IOS:
+        return APP_PACKAGES_IOS[app_name]
+
+    normalized = _normalize_app_name(app_name)
+    alias = APP_ALIASES_IOS.get(normalized)
+    if alias and alias in APP_PACKAGES_IOS:
+        return APP_PACKAGES_IOS[alias]
+
+    for name, bundle_id in APP_PACKAGES_IOS.items():
+        if _normalize_app_name(name) == normalized:
+            return bundle_id
+
+    if "." in app_name:
+        return app_name
+    return None
+
+
+def _normalize_app_name(value: str) -> str:
+    return " ".join(str(value).strip().lower().split())
 
 
 def get_app_name(bundle_id: str) -> str | None:

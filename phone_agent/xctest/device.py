@@ -5,6 +5,7 @@ import time
 from typing import Optional
 
 from phone_agent.config.apps_ios import APP_PACKAGES_IOS as APP_PACKAGES
+from phone_agent.config.apps_ios import get_bundle_id
 
 SCALE_FACTOR = 3 # 3 for most modern iPhone 
 
@@ -368,13 +369,13 @@ def launch_app(
     Returns:
         True if app was launched, False if app not found.
     """
-    if app_name not in APP_PACKAGES:
+    bundle_id = get_bundle_id(app_name)
+    if not bundle_id:
         return False
 
     try:
         import requests
 
-        bundle_id = APP_PACKAGES[app_name]
         url = _get_wda_session_url(wda_url, session_id, "wda/apps/launch")
 
         response = requests.post(

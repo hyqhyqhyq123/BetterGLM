@@ -1,8 +1,8 @@
 # BetterGLM 指标报告
 
-生成时间：`2026-06-29T16:43:57`
+生成时间：`2026-06-29T17:05:35`
 回放目录：`runs`
-已排除运行中任务：`1`
+已排除运行中任务：`0`
 
 ## 核心指标
 
@@ -11,34 +11,36 @@
 | iOS 模板数 | 19 | 可复现 demo 和回归场景覆盖。 |
 | 带评分标准模板数 | 19 | 任务有确定性成功条件，不靠模型自述。 |
 | 低风险模板数 | 17 | Prompt 内显式约束不支付、不下单、不互动。 |
-| 回放任务数 | 9 | 可用于调试、复盘和演示的证据样本。 |
-| 已评分任务数 | 8 | 有 passed/failed 和分数的任务样本。 |
-| 评分通过率 | 62% | 基于回放证据的质量指标。 |
-| 平均分 | 81.1 | 任务完成质量的聚合分。 |
-| 平均步数 | 8.8 | 任务效率和收敛速度信号。 |
+| 回放任务数 | 10 | 可用于调试、复盘和演示的证据样本。 |
+| 已评分任务数 | 9 | 有 passed/failed 和分数的任务样本。 |
+| 评分通过率 | 56% | 基于回放证据的质量指标。 |
+| 平均分 | 68 | 任务完成质量的聚合分。 |
+| 平均步数 | 11.2 | 任务效率和收敛速度信号。 |
 | 完整回放率 | 100% | metadata、steps、HTML replay 的可观测性覆盖。 |
 | 步骤截图覆盖率 | 100% | 每一步是否有视觉证据可复盘。 |
-| 坐标审计覆盖率 | 84% | 触控动作是否记录了坐标映射证据。 |
+| 坐标审计覆盖率 | 88% | 触控动作是否记录了坐标映射证据。 |
 
 ## 质量指标
 
 ```json
 {
-  "total_runs": 9,
-  "evaluated_runs": 8,
+  "total_runs": 10,
+  "evaluated_runs": 9,
   "passed_runs": 5,
-  "failed_or_classified_runs": 3,
-  "scored_pass_rate": 62,
-  "avg_score": 81.1,
-  "avg_steps": 8.8,
+  "failed_or_classified_runs": 4,
+  "scored_pass_rate": 56,
+  "avg_score": 68,
+  "avg_steps": 11.2,
   "avg_duration_seconds": 97,
   "status_counts": {
+    "failed": 4,
     "passed": 5,
-    "failed": 3,
     "completed": 1
   },
   "failure_counts": {
-    "max_steps": 3
+    "app_not_installed": 1,
+    "model_parse_error": 1,
+    "app_launch_failed": 2
   }
 }
 ```
@@ -47,12 +49,12 @@
 
 ```json
 {
-  "complete_replay_runs": 9,
+  "complete_replay_runs": 10,
   "complete_replay_rate": 100,
-  "runs_with_evaluation": 8,
-  "evaluation_coverage": 89,
-  "total_steps": 79,
-  "screenshot_steps": 79,
+  "runs_with_evaluation": 9,
+  "evaluation_coverage": 90,
+  "total_steps": 112,
+  "screenshot_steps": 112,
   "screenshot_file_coverage": 100,
   "step_screenshot_coverage": 100
 }
@@ -62,21 +64,21 @@
 
 ```json
 {
-  "touch_actions": 43,
-  "audited_touch_actions": 36,
-  "coordinate_audit_coverage": 84,
-  "coordinate_points": 37,
+  "touch_actions": 58,
+  "audited_touch_actions": 51,
+  "coordinate_audit_coverage": 88,
+  "coordinate_points": 55,
   "clamped_points": 0,
   "strategy_counts": {
-    "wda_window_calibrated": 37
+    "wda_window_calibrated": 55
   },
   "action_counts": {
-    "Tap": 42,
-    "Launch": 10,
-    "Type": 7,
-    "Back": 6,
-    "Home": 4,
-    "Swipe": 1
+    "Tap": 54,
+    "Back": 17,
+    "Launch": 12,
+    "Type": 9,
+    "Home": 7,
+    "Swipe": 4
   }
 }
 ```
@@ -110,12 +112,13 @@
 
 | 状态 | 分数 | 步数 | 耗时秒 | 失败类型 | 任务 | 回放目录 |
 | --- | ---: | ---: | ---: | --- | --- | --- |
+| failed | 17 | 33 | - | app_not_installed | 打开 Luckin Coffee，搜索或查看拿铁相关页面，停留在结果页，不要下单、不要支付 | `runs/web/20260629-164139-打开-Luckin-Coffee-搜索或查看拿铁相关页面-停留在结果页-不要下单-不要支付` |
 | passed | 100 | 7 | 62 | - | 打开大众点评，搜索火锅，停留在商户或笔记搜索结果页，不要下单、不要写评价 | `runs/web/20260629-163927-打开大众点评-搜索火锅-停留在商户或笔记搜索结果页-不要下单-不要写评价` |
-| failed | 61 | 16 | 259 | max_steps | 打开哔哩哔哩，搜索Python 教程，停留在视频搜索结果页，不要点赞、不要投币、不要评论 | `runs/benchmark-20260629-151604/20260629-152227-打开哔哩哔哩-搜索Python-教程-停留在视频搜索结果页-不要点赞-不要投币-不要评论` |
+| failed | 61 | 16 | 259 | model_parse_error | 打开哔哩哔哩，搜索Python 教程，停留在视频搜索结果页，不要点赞、不要投币、不要评论 | `runs/benchmark-20260629-151604/20260629-152227-打开哔哩哔哩-搜索Python-教程-停留在视频搜索结果页-不要点赞-不要投币-不要评论` |
 | passed | 100 | 7 | 69 | - | 打开高德地图，搜索北京南站，停留在地点搜索结果页，不要发起打车、不要导航 | `runs/benchmark-20260629-151604/20260629-152117-打开高德地图-搜索北京南站-停留在地点搜索结果页-不要发起打车-不要导航` |
 | passed | 100 | 6 | 72 | - | 打开支付宝，搜索汇率，停留在搜索结果页，不要转账、不要付款、不要打开收付款码 | `runs/benchmark-20260629-151604/20260629-152004-打开支付宝-搜索汇率-停留在搜索结果页-不要转账-不要付款-不要打开收付款码` |
-| failed | 44 | 10 | 105 | max_steps | 打开设置，查看当前 Wi-Fi 页面，不要修改任何设置 | `runs/benchmark-20260629-151604/20260629-151818-打开设置-查看当前-Wi-Fi-页面-不要修改任何设置` |
-| failed | 44 | 14 | 133 | max_steps | 打开 Safari 搜索上海天气 | `runs/benchmark-20260629-151604/20260629-151604-打开-Safari-搜索上海天气` |
+| failed | 17 | 10 | 105 | app_launch_failed | 打开设置，查看当前 Wi-Fi 页面，不要修改任何设置 | `runs/benchmark-20260629-151604/20260629-151818-打开设置-查看当前-Wi-Fi-页面-不要修改任何设置` |
+| failed | 17 | 14 | 133 | app_launch_failed | 打开 Safari 搜索上海天气 | `runs/benchmark-20260629-151604/20260629-151604-打开-Safari-搜索上海天气` |
 | passed | 100 | 5 | 51 | - | 打开支付宝，搜索汇率，停留在搜索结果页，不要转账、不要付款、不要打开收付款码 | `runs/web/20260629-150026-打开支付宝-搜索汇率-停留在搜索结果页-不要转账-不要付款-不要打开收付款码` |
 | completed | - | 7 | 64 | - | 打开抖音，评论一句你好 | `runs/web/20260629-143757-打开抖音-评论一句你好` |
 | passed | 100 | 7 | 58 | - | 打开 Safari 搜索北京天气 | `runs/smoke-test/20260629-143116-打开-Safari-搜索北京天气` |

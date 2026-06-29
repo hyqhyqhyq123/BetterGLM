@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-06-29T16:43:57",
+  "generated_at": "2026-06-29T17:05:35",
   "run_roots": [
     "runs"
   ],
-  "excluded_running_runs": 1,
+  "excluded_running_runs": 0,
   "template_metrics": {
     "ios_templates": 19,
     "scored_templates": 19,
@@ -25,52 +25,76 @@
     }
   },
   "quality_metrics": {
-    "total_runs": 9,
-    "evaluated_runs": 8,
+    "total_runs": 10,
+    "evaluated_runs": 9,
     "passed_runs": 5,
-    "failed_or_classified_runs": 3,
-    "scored_pass_rate": 62,
-    "avg_score": 81.1,
-    "avg_steps": 8.8,
+    "failed_or_classified_runs": 4,
+    "scored_pass_rate": 56,
+    "avg_score": 68,
+    "avg_steps": 11.2,
     "avg_duration_seconds": 97,
     "status_counts": {
+      "failed": 4,
       "passed": 5,
-      "failed": 3,
       "completed": 1
     },
     "failure_counts": {
-      "max_steps": 3
+      "app_not_installed": 1,
+      "model_parse_error": 1,
+      "app_launch_failed": 2
     }
   },
   "artifact_metrics": {
-    "complete_replay_runs": 9,
+    "complete_replay_runs": 10,
     "complete_replay_rate": 100,
-    "runs_with_evaluation": 8,
-    "evaluation_coverage": 89,
-    "total_steps": 79,
-    "screenshot_steps": 79,
+    "runs_with_evaluation": 9,
+    "evaluation_coverage": 90,
+    "total_steps": 112,
+    "screenshot_steps": 112,
     "screenshot_file_coverage": 100,
     "step_screenshot_coverage": 100
   },
   "coordinate_metrics": {
-    "touch_actions": 43,
-    "audited_touch_actions": 36,
-    "coordinate_audit_coverage": 84,
-    "coordinate_points": 37,
+    "touch_actions": 58,
+    "audited_touch_actions": 51,
+    "coordinate_audit_coverage": 88,
+    "coordinate_points": 55,
     "clamped_points": 0,
     "strategy_counts": {
-      "wda_window_calibrated": 37
+      "wda_window_calibrated": 55
     },
     "action_counts": {
-      "Tap": 42,
-      "Launch": 10,
-      "Type": 7,
-      "Back": 6,
-      "Home": 4,
-      "Swipe": 1
+      "Tap": 54,
+      "Back": 17,
+      "Launch": 12,
+      "Type": 9,
+      "Home": 7,
+      "Swipe": 4
     }
   },
   "runs": [
+    {
+      "run_id": "20260629-164139-打开-Luckin-Coffee-搜索或查看拿铁相关页面-停留在结果页-不要下单-不要支付",
+      "task": "打开 Luckin Coffee，搜索或查看拿铁相关页面，停留在结果页，不要下单、不要支付",
+      "device_type": "ios",
+      "model": "autoglm-phone",
+      "status": "failed",
+      "metadata_status": "running",
+      "score": 17,
+      "failure_type": "app_not_installed",
+      "started_at": "2026-06-29T16:41:39",
+      "finished_at": null,
+      "duration_seconds": null,
+      "step_count": 33,
+      "current_app": "System Home",
+      "has_steps": true,
+      "has_index": true,
+      "has_evaluation": true,
+      "screenshot_steps": 33,
+      "screenshot_files": 33,
+      "path": "/Users/a1-6/Documents/Open-AutoGLM/runs/web/20260629-164139-打开-Luckin-Coffee-搜索或查看拿铁相关页面-停留在结果页-不要下单-不要支付",
+      "relative_path": "runs/web/20260629-164139-打开-Luckin-Coffee-搜索或查看拿铁相关页面-停留在结果页-不要下单-不要支付"
+    },
     {
       "run_id": "20260629-163927-打开大众点评-搜索火锅-停留在商户或笔记搜索结果页-不要下单-不要写评价",
       "task": "打开大众点评，搜索火锅，停留在商户或笔记搜索结果页，不要下单、不要写评价",
@@ -101,7 +125,7 @@
       "status": "failed",
       "metadata_status": "max_steps",
       "score": 61,
-      "failure_type": "max_steps",
+      "failure_type": "model_parse_error",
       "started_at": "2026-06-29T15:22:27",
       "finished_at": "2026-06-29T15:26:46",
       "duration_seconds": 259,
@@ -166,8 +190,8 @@
       "model": "autoglm-phone",
       "status": "failed",
       "metadata_status": "max_steps",
-      "score": 44,
-      "failure_type": "max_steps",
+      "score": 17,
+      "failure_type": "app_launch_failed",
       "started_at": "2026-06-29T15:18:18",
       "finished_at": "2026-06-29T15:20:03",
       "duration_seconds": 105,
@@ -188,8 +212,8 @@
       "model": "autoglm-phone",
       "status": "failed",
       "metadata_status": "max_steps",
-      "score": 44,
-      "failure_type": "max_steps",
+      "score": 17,
+      "failure_type": "app_launch_failed",
       "started_at": "2026-06-29T15:16:04",
       "finished_at": "2026-06-29T15:18:17",
       "duration_seconds": 133,

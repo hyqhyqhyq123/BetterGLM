@@ -41,8 +41,6 @@ def classify_failure(
     status = str(metadata.get("status") or "")
     if status == "completed" and not evaluation:
         return None
-    if status == "max_steps":
-        return "max_steps"
 
     for step in steps:
         text = " ".join(
@@ -58,29 +56,34 @@ def classify_failure(
         if "wda" in text or "webdriveragent" in text or "connection" in text:
             return "wda_error"
         if "app not found" in text or "not installed" in text:
-            return "app_not_installed"
+            return _classify_app_not_found_text(text)
         if "coordinate" in text or ("tap" in text and "failed" in text):
             return "coordinate_error"
         if "sensitive" in text or "cancelled" in text:
             return "sensitive_action_blocked"
 
     if evaluation:
-        failed = [
-            check.get("name")
+        failed_checks = [
+            check
             for check in evaluation.get("checks", [])
             if check.get("status") != "passed"
         ]
-        if "max_steps" in failed:
-            return "max_steps"
+        failed = [check.get("name") for check in failed_checks]
+        if "no_step_errors" in failed:
+            return "step_error"
+        if "target_app" in failed and _looks_like_launch_failure(failed_checks):
+            return "app_launch_failed"
         if "target_app" in failed:
             return "target_app_mismatch"
         if "must_contain_text" in failed or "any_contain_text" in failed:
             return "target_text_missing"
+        if "max_steps" in failed:
+            return "max_steps"
         if "run_completed" in failed:
             return "not_completed"
-        if "no_step_errors" in failed:
-            return "step_error"
 
+    if status == "max_steps":
+        return "max_steps"
     if status and status != "completed":
         return status
     if evaluation and evaluation.get("status") == "failed":
@@ -94,6 +97,30 @@ def _iter_run_dirs(root: Path) -> list[Path]:
         for path in root.rglob("metadata.json")
         if path.is_file()
     ]
+
+
+def _looks_like_launch_failure(failed_checks: list[dict[str, Any]]) -> bool:
+    for check in failed_checks:
+        if check.get("name") != "target_app":
+            continue
+        evidence = str(check.get("evidence") or "").lower()
+        if "system home" in evidence or "unknown" in evidence:
+            return True
+    return False
+
+
+def _classify_app_not_found_text(text: str) -> str:
+    native_or_alias_terms = (
+        "safari",
+        "系统设置",
+        "settings",
+        "设置",
+        "notes",
+        "备忘录",
+    )
+    if any(term in text for term in native_or_alias_terms):
+        return "app_launch_failed"
+    return "app_not_installed"
 
 
 def _build_run_row(run_dir: Path, root: Path) -> dict[str, Any] | None:
@@ -116,6 +143,8 @@ def _build_run_row(run_dir: Path, root: Path) -> dict[str, Any] | None:
     status = evaluation_status or metadata.get("status") or "unknown"
     score = evaluation.get("score") if isinstance(evaluation, dict) else None
     failure_type = classify_failure(metadata, steps, evaluation)
+    if status == "running" and failure_type:
+        status = "failed"
     relative = run_dir.relative_to(root)
 
     return {

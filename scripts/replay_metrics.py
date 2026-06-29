@@ -92,16 +92,14 @@ def build_metrics(
     include_running: bool = False,
 ) -> dict[str, Any]:
     discovered_runs = discover_runs(run_roots)
-    running_runs = [
-        run for run in discovered_runs if run.get("metadata_status") == "running"
-    ]
+    running_runs = [run for run in discovered_runs if run.get("status") == "running"]
     runs = (
         discovered_runs
         if include_running
         else [
             run
             for run in discovered_runs
-            if run.get("metadata_status") != "running"
+            if run.get("status") != "running"
         ]
     )
     runs.sort(key=lambda run: run.get("started_at") or "", reverse=True)
