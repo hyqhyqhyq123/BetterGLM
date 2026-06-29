@@ -1,6 +1,7 @@
 """iOS PhoneAgent class for orchestrating iOS phone automation."""
 
 import json
+import threading
 import traceback
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -104,13 +105,16 @@ class IOSPhoneAgent:
         self._step_count = 0
         self._replay_recorder: ReplayRecorder | None = None
         self._loop_guard = AgentLoopGuard()
+        self._cancel_requested = threading.Event()
 
-    def run(self, task: str) -> str:
+    def run(self, task: str, *, preserve_cancel: bool = False) -> str:
         """
         Run the agent to complete a task.
 
         Args:
             task: Natural language description of the task.
+            preserve_cancel: Keep an already requested cancellation when a
+                controller asks to stop before the agent loop has started.
 
         Returns:
             Final message from the agent.
@@ -118,7 +122,12 @@ class IOSPhoneAgent:
         self._context = []
         self._step_count = 0
         self._loop_guard.reset()
+        if not preserve_cancel:
+            self._cancel_requested.clear()
         self._start_replay(task)
+
+        if self.is_cancel_requested():
+            return self._finish_cancelled_run()
 
         # First step with user prompt
         result = self._execute_step(task, is_first=True)
@@ -133,6 +142,9 @@ class IOSPhoneAgent:
 
         # Continue until finished or max steps reached
         while self._step_count < self.agent_config.max_steps:
+            if self.is_cancel_requested():
+                return self._finish_cancelled_run()
+
             result = self._execute_step(is_first=False)
 
             if result.finished:
@@ -170,11 +182,23 @@ class IOSPhoneAgent:
         self._context = []
         self._step_count = 0
         self._loop_guard.reset()
+        self._cancel_requested.clear()
+
+    def request_cancel(self) -> None:
+        """Ask the agent loop to stop at the next safe checkpoint."""
+        self._cancel_requested.set()
+
+    def is_cancel_requested(self) -> bool:
+        """Return whether a controller requested the current run to stop."""
+        return self._cancel_requested.is_set()
 
     def _execute_step(
         self, user_prompt: str | None = None, is_first: bool = False
     ) -> StepResult:
         """Execute a single step of the agent loop."""
+        if self.is_cancel_requested():
+            return self._cancelled_step_result()
+
         self._step_count += 1
 
         # Capture current screen state
@@ -186,6 +210,15 @@ class IOSPhoneAgent:
         current_app = get_current_app(
             wda_url=self.agent_config.wda_url, session_id=self.agent_config.session_id
         )
+        screen_info = MessageBuilder.build_screen_info(current_app)
+
+        if self.is_cancel_requested():
+            self._record_cancelled_step(
+                current_app=current_app,
+                screen_info=screen_info,
+                screenshot=screenshot,
+            )
+            return self._cancelled_step_result()
 
         # Build messages
         if is_first:
@@ -193,7 +226,6 @@ class IOSPhoneAgent:
                 MessageBuilder.create_system_message(self.agent_config.system_prompt)
             )
 
-            screen_info = MessageBuilder.build_screen_info(current_app)
             text_content = f"{user_prompt}\n\n{screen_info}"
 
             self._context.append(
@@ -202,7 +234,6 @@ class IOSPhoneAgent:
                 )
             )
         else:
-            screen_info = MessageBuilder.build_screen_info(current_app)
             text_content = f"** Screen Info **\n\n{screen_info}"
 
             self._context.append(
@@ -210,6 +241,14 @@ class IOSPhoneAgent:
                     text=text_content, image_base64=screenshot.base64_data
                 )
             )
+
+        if self.is_cancel_requested():
+            self._record_cancelled_step(
+                current_app=current_app,
+                screen_info=screen_info,
+                screenshot=screenshot,
+            )
+            return self._cancelled_step_result()
 
         # Get model response
         try:
@@ -233,6 +272,17 @@ class IOSPhoneAgent:
                 message=f"Model error: {e}",
                 status="failed",
             )
+
+        if self.is_cancel_requested():
+            self._record_cancelled_step(
+                current_app=current_app,
+                screen_info=screen_info,
+                screenshot=screenshot,
+                thinking=response.thinking,
+                raw_action=response.action,
+                model_metrics=self._model_metrics(response),
+            )
+            return self._cancelled_step_result()
 
         # Parse action from response
         try:
@@ -293,6 +343,19 @@ class IOSPhoneAgent:
 
         # Remove image from context to save space
         self._context[-1] = MessageBuilder.remove_images_from_message(self._context[-1])
+
+        if self.is_cancel_requested():
+            self._record_cancelled_step(
+                current_app=current_app,
+                screen_info=screen_info,
+                screenshot=screenshot,
+                thinking=response.thinking,
+                raw_action=response.action,
+                parsed_action=action,
+                action_result=ActionResult(False, True, _cancel_message()),
+                model_metrics=self._model_metrics(response),
+            )
+            return self._cancelled_step_result()
 
         # Execute action
         execution_error = None
@@ -399,6 +462,29 @@ class IOSPhoneAgent:
         if self._replay_recorder is not None:
             self._replay_recorder.finish(result, status=status)
 
+    def _finish_cancelled_run(self) -> str:
+        message = _cancel_message()
+        self._finish_replay(message, status="cancelled")
+        return message
+
+    def _cancelled_step_result(self) -> StepResult:
+        return StepResult(
+            success=False,
+            finished=True,
+            action=None,
+            thinking="",
+            message=_cancel_message(),
+            status="cancelled",
+        )
+
+    def _record_cancelled_step(self, **kwargs) -> None:
+        self._record_replay_step(
+            finished=True,
+            message=_cancel_message(),
+            error=_cancel_message(),
+            **kwargs,
+        )
+
     def _record_replay_step(self, **kwargs) -> None:
         if self._replay_recorder is not None:
             self._replay_recorder.record_step(
@@ -412,3 +498,7 @@ class IOSPhoneAgent:
             "time_to_thinking_end": response.time_to_thinking_end,
             "total_time": response.total_time,
         }
+
+
+def _cancel_message() -> str:
+    return "Task cancelled by user"

@@ -61,6 +61,8 @@ class WebConsoleState:
         self.error: str | None = None
         self.evaluation: dict[str, Any] | None = None
         self.replay_path: str | None = None
+        self.cancel_requested = False
+        self.active_agent: Any | None = None
         self.started_at: str | None = None
         self.finished_at: str | None = None
         self.job_thread: threading.Thread | None = None
@@ -75,6 +77,7 @@ class WebConsoleState:
                 "error": self.error,
                 "evaluation": self.evaluation,
                 "replay_path": self.replay_path,
+                "cancel_requested": self.cancel_requested,
                 "started_at": self.started_at,
                 "finished_at": self.finished_at,
                 "options": _public_options(self.options),
@@ -112,6 +115,8 @@ class WebConsoleState:
             self.error = None
             self.evaluation = None
             self.replay_path = None
+            self.cancel_requested = False
+            self.active_agent = None
             self.started_at = _now()
             self.finished_at = None
 
@@ -122,21 +127,39 @@ class WebConsoleState:
 
         return True, "Task started"
 
+    def cancel_job(self) -> tuple[bool, str]:
+        """Request the running agent job to stop at the next safe checkpoint."""
+        with self.lock:
+            if not self.running:
+                return False, "No task is running"
+
+            self.cancel_requested = True
+            agent = self.active_agent
+
+        if agent and hasattr(agent, "request_cancel"):
+            agent.request_cancel()
+        return True, "Stop requested"
+
     def _run_task(self, task: str, criteria: dict[str, Any] | None) -> None:
         agent: Any | None = None
         monitor_stop = threading.Event()
         monitor_thread: threading.Thread | None = None
         try:
             agent = _build_agent(self.options)
+            with self.lock:
+                self.active_agent = agent
+                preserve_cancel = self.cancel_requested
+            if preserve_cancel and hasattr(agent, "request_cancel"):
+                agent.request_cancel()
             monitor_thread = threading.Thread(
                 target=self._monitor_replay_path,
                 args=(agent, monitor_stop),
                 daemon=True,
             )
             monitor_thread.start()
-            result = agent.run(task)
+            result = agent.run(task, preserve_cancel=True)
             evaluation = None
-            if criteria and agent.replay_path:
+            if criteria and agent.replay_path and result != "Task cancelled by user":
                 report = evaluate_replay(agent.replay_path, criteria)
                 evaluation = save_evaluation_report(agent.replay_path, report)
             with self.lock:
@@ -156,6 +179,8 @@ class WebConsoleState:
                 monitor_thread.join(timeout=1)
             with self.lock:
                 self.running = False
+                self.cancel_requested = False
+                self.active_agent = None
                 self.finished_at = _now()
 
     def _monitor_replay_path(self, agent: Any, stop_event: threading.Event) -> None:
@@ -228,6 +253,10 @@ class WebConsoleHandler(BaseHTTPRequestHandler):
                 )
             except ValueError as e:
                 ok, message = False, str(e)
+            status = HTTPStatus.ACCEPTED if ok else HTTPStatus.CONFLICT
+            self._send_json({"ok": ok, "message": message}, status=status)
+        elif parsed.path == "/api/stop":
+            ok, message = self.console_state.cancel_job()
             status = HTTPStatus.ACCEPTED if ok else HTTPStatus.CONFLICT
             self._send_json({"ok": ok, "message": message}, status=status)
         elif parsed.path == "/api/doctor":
@@ -433,6 +462,7 @@ INDEX_HTML = """<!doctype html>
     textarea { width: 100%; min-height: 128px; box-sizing: border-box; resize: vertical; border: 1px solid #d0d7de; border-radius: 6px; padding: 10px; font: inherit; }
     button { border: 0; border-radius: 6px; padding: 10px 12px; background: #0969da; color: white; font-weight: 600; cursor: pointer; }
     button.secondary { background: #57606a; }
+    button.danger { background: #b42318; }
     button:disabled { opacity: .55; cursor: not-allowed; }
     .row { display: flex; gap: 8px; margin-top: 10px; }
     .kv { display: grid; grid-template-columns: 110px 1fr; gap: 8px; font-size: 13px; margin-top: 12px; }
@@ -481,6 +511,7 @@ INDEX_HTML = """<!doctype html>
         <textarea id="task" placeholder="例如：打开 Safari 搜索天气"></textarea>
         <div class="row">
           <button id="runBtn" onclick="runTask()">运行任务</button>
+          <button id="stopBtn" class="danger" onclick="stopTask()" disabled>停止任务</button>
           <button class="secondary" onclick="runDoctor()">Doctor</button>
         </div>
         <div class="kv" id="config"></div>
@@ -539,6 +570,13 @@ INDEX_HTML = """<!doctype html>
       fetchState();
     }
 
+    async function stopTask() {
+      const res = await fetch('/api/stop', {method: 'POST'});
+      const payload = await res.json();
+      if (!payload.ok) alert(payload.message || '停止失败');
+      fetchState();
+    }
+
     async function runDoctor() {
       const res = await fetch('/api/doctor', {
         method: 'POST',
@@ -549,9 +587,10 @@ INDEX_HTML = """<!doctype html>
     }
 
     function renderState(state) {
-      document.getElementById('topStatus').textContent = state.running ? 'Running' : 'Idle';
+      document.getElementById('topStatus').textContent = state.cancel_requested ? 'Stopping...' : state.running ? 'Running' : 'Idle';
       document.getElementById('topStatus').className = 'status ' + (state.error ? 'fail' : state.running ? 'warn' : 'ok');
       document.getElementById('runBtn').disabled = state.running;
+      document.getElementById('stopBtn').disabled = !state.running || state.cancel_requested;
       const options = state.options || {};
       document.getElementById('config').innerHTML = [
         ['Device', options.device_type],
@@ -562,7 +601,7 @@ INDEX_HTML = """<!doctype html>
 
       document.getElementById('summary').innerHTML = `
         <div><strong>Task:</strong> ${escapeHtml(state.task || 'None')}</div>
-        <div><strong>Result:</strong> ${escapeHtml(state.result || state.error || (state.running ? 'Running...' : 'None'))}</div>
+        <div><strong>Result:</strong> ${escapeHtml(state.result || state.error || (state.cancel_requested ? 'Stopping...' : state.running ? 'Running...' : 'None'))}</div>
       `;
       document.getElementById('replayLink').innerHTML = state.replay ? `<a href="${state.replay.index_url}" target="_blank">打开完整回放 HTML</a><br><span class="muted">${escapeHtml(state.replay.path)}</span>` : '';
       renderEvaluation(state.evaluation);

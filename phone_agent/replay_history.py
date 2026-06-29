@@ -39,6 +39,8 @@ def classify_failure(
         return None
 
     status = str(metadata.get("status") or "")
+    if status == "cancelled":
+        return "user_cancelled"
     if status == "completed" and not evaluation:
         return None
 
@@ -59,6 +61,8 @@ def classify_failure(
             return _classify_app_not_found_text(text)
         if "coordinate" in text or ("tap" in text and "failed" in text):
             return "coordinate_error"
+        if "task cancelled by user" in text or "user_cancelled" in text:
+            return "user_cancelled"
         if "sensitive" in text or "cancelled" in text:
             return "sensitive_action_blocked"
 
