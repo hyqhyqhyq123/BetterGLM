@@ -25,6 +25,7 @@ def main() -> None:
         run_roots=[Path(path) for path in args.runs],
         templates_file=args.templates_file,
         limit=args.limit,
+        include_running=args.include_running,
     )
 
     if args.json_output:
@@ -66,6 +67,11 @@ def parse_args() -> argparse.Namespace:
         help="Maximum recent runs to include.",
     )
     parser.add_argument(
+        "--include-running",
+        action="store_true",
+        help="Include replay runs whose metadata status is still running.",
+    )
+    parser.add_argument(
         "--output",
         help="Write a Markdown report to this path instead of stdout.",
     )
@@ -83,8 +89,21 @@ def build_metrics(
     run_roots: list[Path],
     templates_file: str | None = None,
     limit: int = 200,
+    include_running: bool = False,
 ) -> dict[str, Any]:
-    runs = discover_runs(run_roots)
+    discovered_runs = discover_runs(run_roots)
+    running_runs = [
+        run for run in discovered_runs if run.get("metadata_status") == "running"
+    ]
+    runs = (
+        discovered_runs
+        if include_running
+        else [
+            run
+            for run in discovered_runs
+            if run.get("metadata_status") != "running"
+        ]
+    )
     runs.sort(key=lambda run: run.get("started_at") or "", reverse=True)
     runs = runs[:limit]
 
@@ -95,6 +114,7 @@ def build_metrics(
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "run_roots": [str(path) for path in run_roots],
+        "excluded_running_runs": 0 if include_running else len(running_runs),
         "template_metrics": build_template_metrics(ios_templates),
         "quality_metrics": build_quality_metrics(runs),
         "artifact_metrics": build_artifact_metrics(runs),
@@ -346,6 +366,7 @@ def render_markdown(metrics: dict[str, Any]) -> str:
         "",
         f"生成时间：`{metrics['generated_at']}`",
         f"回放目录：`{', '.join(metrics['run_roots'])}`",
+        f"已排除运行中任务：`{metrics.get('excluded_running_runs', 0)}`",
         "",
         "## 核心指标",
         "",
@@ -387,7 +408,7 @@ def render_markdown(metrics: dict[str, Any]) -> str:
 
     for run in runs[:20]:
         lines.append(
-                "| {status} | {score} | {steps} | {duration} | {failure} | {task} | `{path}` |".format(
+            "| {status} | {score} | {steps} | {duration} | {failure} | {task} | `{path}` |".format(
                 status=escape_cell(run.get("status") or "-"),
                 score=escape_cell(value_or_dash(run.get("score"))),
                 steps=escape_cell(value_or_dash(run.get("step_count"))),

@@ -140,7 +140,7 @@ Checks:
 
 ## 历史 Dashboard
 
-Web 控制台会扫描 `runs/web` 下的回放目录，并通过 `/api/history` 汇总最近任务：
+Web 控制台会递归扫描 `runs` 下的回放目录，并通过 `/api/history` 汇总最近任务。这样 `runs/web`、`runs/smoke-test` 和 `runs/benchmark-*` 都会进入同一个历史 Dashboard：
 
 - 总任务数、已评分任务数、评分通过率、未评分完成数
 - 平均分、平均步数、平均耗时

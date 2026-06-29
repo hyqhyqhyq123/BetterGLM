@@ -1,8 +1,9 @@
 {
-  "generated_at": "2026-06-29T15:28:42",
+  "generated_at": "2026-06-29T16:43:57",
   "run_roots": [
     "runs"
   ],
+  "excluded_running_runs": 1,
   "template_metrics": {
     "ios_templates": 19,
     "scored_templates": 19,
@@ -24,17 +25,17 @@
     }
   },
   "quality_metrics": {
-    "total_runs": 8,
-    "evaluated_runs": 7,
-    "passed_runs": 4,
+    "total_runs": 9,
+    "evaluated_runs": 8,
+    "passed_runs": 5,
     "failed_or_classified_runs": 3,
-    "scored_pass_rate": 57,
-    "avg_score": 78.4,
-    "avg_steps": 9,
-    "avg_duration_seconds": 101.4,
+    "scored_pass_rate": 62,
+    "avg_score": 81.1,
+    "avg_steps": 8.8,
+    "avg_duration_seconds": 97,
     "status_counts": {
+      "passed": 5,
       "failed": 3,
-      "passed": 4,
       "completed": 1
     },
     "failure_counts": {
@@ -42,34 +43,56 @@
     }
   },
   "artifact_metrics": {
-    "complete_replay_runs": 8,
+    "complete_replay_runs": 9,
     "complete_replay_rate": 100,
-    "runs_with_evaluation": 7,
-    "evaluation_coverage": 88,
-    "total_steps": 72,
-    "screenshot_steps": 72,
+    "runs_with_evaluation": 8,
+    "evaluation_coverage": 89,
+    "total_steps": 79,
+    "screenshot_steps": 79,
     "screenshot_file_coverage": 100,
     "step_screenshot_coverage": 100
   },
   "coordinate_metrics": {
-    "touch_actions": 39,
-    "audited_touch_actions": 32,
-    "coordinate_audit_coverage": 82,
-    "coordinate_points": 33,
+    "touch_actions": 43,
+    "audited_touch_actions": 36,
+    "coordinate_audit_coverage": 84,
+    "coordinate_points": 37,
     "clamped_points": 0,
     "strategy_counts": {
-      "wda_window_calibrated": 33
+      "wda_window_calibrated": 37
     },
     "action_counts": {
-      "Tap": 38,
-      "Launch": 9,
-      "Type": 6,
+      "Tap": 42,
+      "Launch": 10,
+      "Type": 7,
       "Back": 6,
       "Home": 4,
       "Swipe": 1
     }
   },
   "runs": [
+    {
+      "run_id": "20260629-163927-打开大众点评-搜索火锅-停留在商户或笔记搜索结果页-不要下单-不要写评价",
+      "task": "打开大众点评，搜索火锅，停留在商户或笔记搜索结果页，不要下单、不要写评价",
+      "device_type": "ios",
+      "model": "autoglm-phone",
+      "status": "passed",
+      "metadata_status": "completed",
+      "score": 100,
+      "failure_type": null,
+      "started_at": "2026-06-29T16:39:27",
+      "finished_at": "2026-06-29T16:40:29",
+      "duration_seconds": 62,
+      "step_count": 7,
+      "current_app": "大众点评",
+      "has_steps": true,
+      "has_index": true,
+      "has_evaluation": true,
+      "screenshot_steps": 7,
+      "screenshot_files": 7,
+      "path": "/Users/a1-6/Documents/Open-AutoGLM/runs/web/20260629-163927-打开大众点评-搜索火锅-停留在商户或笔记搜索结果页-不要下单-不要写评价",
+      "relative_path": "runs/web/20260629-163927-打开大众点评-搜索火锅-停留在商户或笔记搜索结果页-不要下单-不要写评价"
+    },
     {
       "run_id": "20260629-152227-打开哔哩哔哩-搜索Python-教程-停留在视频搜索结果页-不要点赞-不要投币-不要评论",
       "task": "打开哔哩哔哩，搜索Python 教程，停留在视频搜索结果页，不要点赞、不要投币、不要评论",

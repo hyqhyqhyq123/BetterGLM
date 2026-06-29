@@ -43,7 +43,7 @@ class WebConsoleOptions:
     device_id: str | None = None
     wda_url: str = "http://localhost:8100"
     lang: str = "cn"
-    replay_dir: str = "runs/web"
+    replay_dir: str = "runs"
     templates_file: str | None = None
     quiet: bool = False
 

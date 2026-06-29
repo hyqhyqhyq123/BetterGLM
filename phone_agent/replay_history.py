@@ -88,9 +88,9 @@ def classify_failure(
 
 def _iter_run_dirs(root: Path) -> list[Path]:
     return [
-        path
-        for path in root.iterdir()
-        if path.is_dir() and (path / "metadata.json").exists()
+        path.parent
+        for path in root.rglob("metadata.json")
+        if path.is_file()
     ]
 
 

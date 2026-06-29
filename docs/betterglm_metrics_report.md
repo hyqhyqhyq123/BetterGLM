@@ -1,7 +1,8 @@
 # BetterGLM 指标报告
 
-生成时间：`2026-06-29T15:28:42`
+生成时间：`2026-06-29T16:43:57`
 回放目录：`runs`
+已排除运行中任务：`1`
 
 ## 核心指标
 
@@ -10,30 +11,30 @@
 | iOS 模板数 | 19 | 可复现 demo 和回归场景覆盖。 |
 | 带评分标准模板数 | 19 | 任务有确定性成功条件，不靠模型自述。 |
 | 低风险模板数 | 17 | Prompt 内显式约束不支付、不下单、不互动。 |
-| 回放任务数 | 8 | 可用于调试、复盘和演示的证据样本。 |
-| 已评分任务数 | 7 | 有 passed/failed 和分数的任务样本。 |
-| 评分通过率 | 57% | 基于回放证据的质量指标。 |
-| 平均分 | 78.4 | 任务完成质量的聚合分。 |
-| 平均步数 | 9 | 任务效率和收敛速度信号。 |
+| 回放任务数 | 9 | 可用于调试、复盘和演示的证据样本。 |
+| 已评分任务数 | 8 | 有 passed/failed 和分数的任务样本。 |
+| 评分通过率 | 62% | 基于回放证据的质量指标。 |
+| 平均分 | 81.1 | 任务完成质量的聚合分。 |
+| 平均步数 | 8.8 | 任务效率和收敛速度信号。 |
 | 完整回放率 | 100% | metadata、steps、HTML replay 的可观测性覆盖。 |
 | 步骤截图覆盖率 | 100% | 每一步是否有视觉证据可复盘。 |
-| 坐标审计覆盖率 | 82% | 触控动作是否记录了坐标映射证据。 |
+| 坐标审计覆盖率 | 84% | 触控动作是否记录了坐标映射证据。 |
 
 ## 质量指标
 
 ```json
 {
-  "total_runs": 8,
-  "evaluated_runs": 7,
-  "passed_runs": 4,
+  "total_runs": 9,
+  "evaluated_runs": 8,
+  "passed_runs": 5,
   "failed_or_classified_runs": 3,
-  "scored_pass_rate": 57,
-  "avg_score": 78.4,
-  "avg_steps": 9,
-  "avg_duration_seconds": 101.4,
+  "scored_pass_rate": 62,
+  "avg_score": 81.1,
+  "avg_steps": 8.8,
+  "avg_duration_seconds": 97,
   "status_counts": {
+    "passed": 5,
     "failed": 3,
-    "passed": 4,
     "completed": 1
   },
   "failure_counts": {
@@ -46,12 +47,12 @@
 
 ```json
 {
-  "complete_replay_runs": 8,
+  "complete_replay_runs": 9,
   "complete_replay_rate": 100,
-  "runs_with_evaluation": 7,
-  "evaluation_coverage": 88,
-  "total_steps": 72,
-  "screenshot_steps": 72,
+  "runs_with_evaluation": 8,
+  "evaluation_coverage": 89,
+  "total_steps": 79,
+  "screenshot_steps": 79,
   "screenshot_file_coverage": 100,
   "step_screenshot_coverage": 100
 }
@@ -61,18 +62,18 @@
 
 ```json
 {
-  "touch_actions": 39,
-  "audited_touch_actions": 32,
-  "coordinate_audit_coverage": 82,
-  "coordinate_points": 33,
+  "touch_actions": 43,
+  "audited_touch_actions": 36,
+  "coordinate_audit_coverage": 84,
+  "coordinate_points": 37,
   "clamped_points": 0,
   "strategy_counts": {
-    "wda_window_calibrated": 33
+    "wda_window_calibrated": 37
   },
   "action_counts": {
-    "Tap": 38,
-    "Launch": 9,
-    "Type": 6,
+    "Tap": 42,
+    "Launch": 10,
+    "Type": 7,
     "Back": 6,
     "Home": 4,
     "Swipe": 1
@@ -109,6 +110,7 @@
 
 | 状态 | 分数 | 步数 | 耗时秒 | 失败类型 | 任务 | 回放目录 |
 | --- | ---: | ---: | ---: | --- | --- | --- |
+| passed | 100 | 7 | 62 | - | 打开大众点评，搜索火锅，停留在商户或笔记搜索结果页，不要下单、不要写评价 | `runs/web/20260629-163927-打开大众点评-搜索火锅-停留在商户或笔记搜索结果页-不要下单-不要写评价` |
 | failed | 61 | 16 | 259 | max_steps | 打开哔哩哔哩，搜索Python 教程，停留在视频搜索结果页，不要点赞、不要投币、不要评论 | `runs/benchmark-20260629-151604/20260629-152227-打开哔哩哔哩-搜索Python-教程-停留在视频搜索结果页-不要点赞-不要投币-不要评论` |
 | passed | 100 | 7 | 69 | - | 打开高德地图，搜索北京南站，停留在地点搜索结果页，不要发起打车、不要导航 | `runs/benchmark-20260629-151604/20260629-152117-打开高德地图-搜索北京南站-停留在地点搜索结果页-不要发起打车-不要导航` |
 | passed | 100 | 6 | 72 | - | 打开支付宝，搜索汇率，停留在搜索结果页，不要转账、不要付款、不要打开收付款码 | `runs/benchmark-20260629-151604/20260629-152004-打开支付宝-搜索汇率-停留在搜索结果页-不要转账-不要付款-不要打开收付款码` |

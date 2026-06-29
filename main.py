@@ -825,7 +825,7 @@ def main():
                 device_id=args.device_id,
                 wda_url=args.wda_url,
                 lang=args.lang,
-                replay_dir=args.replay_dir or "runs/web",
+                replay_dir=args.replay_dir or "runs",
                 templates_file=args.templates_file,
                 quiet=args.quiet,
             )
