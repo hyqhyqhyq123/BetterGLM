@@ -1,6 +1,6 @@
 # BetterGLM 指标报告
 
-生成时间：`2026-06-29T17:05:35`
+生成时间：`2026-06-29T18:31:58`
 回放目录：`runs`
 已排除运行中任务：`0`
 
@@ -11,11 +11,11 @@
 | iOS 模板数 | 19 | 可复现 demo 和回归场景覆盖。 |
 | 带评分标准模板数 | 19 | 任务有确定性成功条件，不靠模型自述。 |
 | 低风险模板数 | 17 | Prompt 内显式约束不支付、不下单、不互动。 |
-| 回放任务数 | 10 | 可用于调试、复盘和演示的证据样本。 |
-| 已评分任务数 | 9 | 有 passed/failed 和分数的任务样本。 |
-| 评分通过率 | 56% | 基于回放证据的质量指标。 |
-| 平均分 | 68 | 任务完成质量的聚合分。 |
-| 平均步数 | 11.2 | 任务效率和收敛速度信号。 |
+| 回放任务数 | 12 | 可用于调试、复盘和演示的证据样本。 |
+| 已评分任务数 | 11 | 有 passed/failed 和分数的任务样本。 |
+| 评分通过率 | 45% | 基于回放证据的质量指标。 |
+| 平均分 | 65.2 | 任务完成质量的聚合分。 |
+| 平均步数 | 10.3 | 任务效率和收敛速度信号。 |
 | 完整回放率 | 100% | metadata、steps、HTML replay 的可观测性覆盖。 |
 | 步骤截图覆盖率 | 100% | 每一步是否有视觉证据可复盘。 |
 | 坐标审计覆盖率 | 88% | 触控动作是否记录了坐标映射证据。 |
@@ -24,20 +24,22 @@
 
 ```json
 {
-  "total_runs": 10,
-  "evaluated_runs": 9,
+  "total_runs": 12,
+  "evaluated_runs": 11,
   "passed_runs": 5,
-  "failed_or_classified_runs": 4,
-  "scored_pass_rate": 56,
-  "avg_score": 68,
-  "avg_steps": 11.2,
-  "avg_duration_seconds": 97,
+  "failed_or_classified_runs": 6,
+  "scored_pass_rate": 45,
+  "avg_score": 65.2,
+  "avg_steps": 10.3,
+  "avg_duration_seconds": 93.3,
   "status_counts": {
-    "failed": 4,
+    "failed": 6,
     "passed": 5,
     "completed": 1
   },
   "failure_counts": {
+    "repeated_action_loop": 1,
+    "manual_takeover_required": 1,
     "app_not_installed": 1,
     "model_parse_error": 1,
     "app_launch_failed": 2
@@ -49,12 +51,12 @@
 
 ```json
 {
-  "complete_replay_runs": 10,
+  "complete_replay_runs": 12,
   "complete_replay_rate": 100,
-  "runs_with_evaluation": 9,
-  "evaluation_coverage": 90,
-  "total_steps": 112,
-  "screenshot_steps": 112,
+  "runs_with_evaluation": 11,
+  "evaluation_coverage": 92,
+  "total_steps": 124,
+  "screenshot_steps": 124,
   "screenshot_file_coverage": 100,
   "step_screenshot_coverage": 100
 }
@@ -64,21 +66,22 @@
 
 ```json
 {
-  "touch_actions": 58,
-  "audited_touch_actions": 51,
+  "touch_actions": 65,
+  "audited_touch_actions": 57,
   "coordinate_audit_coverage": 88,
-  "coordinate_points": 55,
+  "coordinate_points": 63,
   "clamped_points": 0,
   "strategy_counts": {
-    "wda_window_calibrated": 55
+    "wda_window_calibrated": 63
   },
   "action_counts": {
-    "Tap": 54,
+    "Tap": 58,
     "Back": 17,
-    "Launch": 12,
-    "Type": 9,
+    "Launch": 15,
+    "Type": 10,
+    "Swipe": 7,
     "Home": 7,
-    "Swipe": 4
+    "Take_over": 1
   }
 }
 ```
@@ -112,6 +115,8 @@
 
 | 状态 | 分数 | 步数 | 耗时秒 | 失败类型 | 任务 | 回放目录 |
 | --- | ---: | ---: | ---: | --- | --- | --- |
+| failed | 61 | 10 | 84 | repeated_action_loop | 打开小红书，搜索面试经验，停留在笔记搜索结果页，不要点赞、不要收藏、不要评论 | `runs/20260629-182429-打开小红书-搜索面试经验-停留在笔记搜索结果页-不要点赞-不要收藏-不要评论` |
+| failed | 44 | 2 | 69 | manual_takeover_required | 打开 Luckin Coffee，搜索或查看拿铁相关页面，停留在结果页，不要下单、不要支付 | `runs/20260629-171220-打开-Luckin-Coffee-搜索或查看拿铁相关页面-停留在结果页-不要下单-不要支付` |
 | failed | 17 | 33 | - | app_not_installed | 打开 Luckin Coffee，搜索或查看拿铁相关页面，停留在结果页，不要下单、不要支付 | `runs/web/20260629-164139-打开-Luckin-Coffee-搜索或查看拿铁相关页面-停留在结果页-不要下单-不要支付` |
 | passed | 100 | 7 | 62 | - | 打开大众点评，搜索火锅，停留在商户或笔记搜索结果页，不要下单、不要写评价 | `runs/web/20260629-163927-打开大众点评-搜索火锅-停留在商户或笔记搜索结果页-不要下单-不要写评价` |
 | failed | 61 | 16 | 259 | model_parse_error | 打开哔哩哔哩，搜索Python 教程，停留在视频搜索结果页，不要点赞、不要投币、不要评论 | `runs/benchmark-20260629-151604/20260629-152227-打开哔哩哔哩-搜索Python-教程-停留在视频搜索结果页-不要点赞-不要投币-不要评论` |
